@@ -1,14 +1,16 @@
 from pathlib import Path
 
-import yaml
-
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-_CONFIG_PATH = _PROJECT_ROOT / "config" / "appConfig.yaml"
+_ICONS_DIR = _PROJECT_ROOT / "assets" / "icons"
+_IMAGES_DIR = _PROJECT_ROOT / "assets" / "images"
 
-with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
-    _icons = yaml.safe_load(f)["icons"]
+APP_ICON = _ICONS_DIR / "app.ico"
+WINDOW_ICON = _ICONS_DIR / "window.ico"
+TRAY_ICON = _ICONS_DIR / "tray.ico"
+UI_ICON = _IMAGES_DIR / "tifa.svg"
 
-APP_ICON = _PROJECT_ROOT / _icons["app"]
-WINDOW_ICON = _PROJECT_ROOT / _icons["window"]
-TRAY_ICON = _PROJECT_ROOT / _icons["tray"]
-UI_ICON = _PROJECT_ROOT / _icons["ui"]
+MATERIA_BLUE_ICON = _ICONS_DIR / "materia_blue.ico"
+MATERIA_GREEN_ICON = _ICONS_DIR / "materia_green.ico"
+MATERIA_PURPLE_ICON = _ICONS_DIR / "materia_purple.ico"
+MATERIA_RED_ICON = _ICONS_DIR / "materia_red.ico"
+MATERIA_YELLOW_ICON = _ICONS_DIR / "materia_yellow.ico"

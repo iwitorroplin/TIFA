@@ -4,12 +4,6 @@ app:
   language: es
   theme: system
 
-icons:
-  app: assets/icons/app.ico
-  window: assets/icons/window.ico
-  tray: assets/icons/tray.ico
-  ui: assets/images/tifa.svg
-
 ui:
   dateFormat: "dd/MM/yyyy"
   timeFormat: "HH:mm:ss"
