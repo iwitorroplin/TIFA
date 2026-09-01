@@ -19,8 +19,6 @@ class Navbar(QWidget):
         super().__init__()
         self.setFixedWidth(160)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet("background-color: #4d88cb;")
-
         self._placeholder_icon = APP_ICON
 
         self._layout = QVBoxLayout(self)
