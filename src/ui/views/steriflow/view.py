@@ -1,6 +1,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QStackedWidget, QVBoxLayout, QWidget
 
+from src.ui.views.steriflow.home_page import SteriflowHomePage
 from src.ui.views.steriflow.tab_bar import SteriflowTabBar
 
 
@@ -10,8 +11,10 @@ class SteriflowView(QWidget):
 
         self._tabs = SteriflowTabBar()
         self._pages = QStackedWidget()
-        self._pages.addWidget(self._placeholder_page("Steriflow - Tab 1"))
-        self._pages.addWidget(self._placeholder_page("Steriflow - Tab 2"))
+        self._pages.addWidget(SteriflowHomePage())
+        self._pages.addWidget(self._placeholder_page("Steriflow - Configuración"))
+        self._pages.addWidget(self._placeholder_page("Steriflow - Data"))
+        self._pages.addWidget(self._placeholder_page("Steriflow - Logs"))
 
         self._tabs.currentChanged.connect(self._pages.setCurrentIndex)
 
