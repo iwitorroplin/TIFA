@@ -3,8 +3,14 @@ from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import QGraphicsDropShadowEffect, QPushButton
 
 
-class SidebarButton(QPushButton):
-    def __init__(self, text, icon=None, color="#4d88cb", checkable=True):
+class NavButton(QPushButton):
+    def __init__(
+            self,
+            text, 
+            icon=None, 
+            color="#005eca",
+            checkable=True):
+
         super().__init__(text)
         self.setCheckable(checkable)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -20,6 +26,7 @@ class SidebarButton(QPushButton):
         self.setGraphicsEffect(shadow)
 
         base = QColor(color)
+        default = base.name()
         hover = base.lighter(140).name()
         checked = base.darker(140).name()
 
@@ -30,7 +37,7 @@ class SidebarButton(QPushButton):
                 border-radius: 8px;
                 padding: 8px 12px;
                 text-align: left;
-                background-color: transparent;
+                background-color: {default};
                 color: white;
             }}
             QPushButton:hover {{

@@ -14,5 +14,7 @@ def main():
     window = MainWindow()
     tray = TrayApp(window)
     tray.show()
+    window.show()
+
 
     sys.exit(app.exec())

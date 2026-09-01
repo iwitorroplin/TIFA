@@ -9,10 +9,10 @@ from src.ui.assets import (
     MATERIA_PURPLE_ICON,
     MATERIA_YELLOW_ICON
 )
-from src.ui.components.sidebar_button import SidebarButton
+from src.ui.components.nav_button import NavButton
 
 
-class Sidebar(QWidget):
+class Navbar(QWidget):
     currentChanged = Signal(int)
 
     def __init__(self):
@@ -33,14 +33,18 @@ class Sidebar(QWidget):
         self._group.idClicked.connect(self.currentChanged)
 
         self.add_item("Home", APP_ICON)
+        self.add_item("Ferlo", MATERIA_RED_ICON)
+        self.add_item("Steriflow", MATERIA_RED_ICON)
+        self.add_item("Macona", MATERIA_RED_ICON)
+        self.add_item("Pasteurization", MATERIA_RED_ICON)
         self.add_item("Configuración", MATERIA_BLUE_ICON)
-        self.add_action("Salir", MATERIA_RED_ICON, callback=QApplication.quit)
+        self.add_action("Salir", MATERIA_RED_ICON, "#e20c0c", callback=QApplication.quit)
 
     def add_item(self, label, icon=None, color=None, checkable=True):
-        button = SidebarButton(
+        button = NavButton(
             label,
             icon=icon if icon is not None else self._placeholder_icon,
-            color=color or "#4d88cb",
+            color=color or "#097cc9",
             checkable=checkable,
         )
 
@@ -54,7 +58,7 @@ class Sidebar(QWidget):
         return index
 
     def add_action(self, label, icon=None, color=None, callback=None):
-        button = SidebarButton(
+        button = NavButton(
             label,
             icon=icon if icon is not None else self._placeholder_icon,
             color=color or "#4d88cb",
