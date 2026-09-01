@@ -7,3 +7,10 @@ __pycache__/
 venv/
 build/
 dist/
+
+# Config editada desde la app; la versionada es machines.default.yaml,
+# que la app copia sola cuando esta no existe.
+config/machines.yaml
+
+# Carpetas de staging/logs por defecto de los backups (ruta relativa al programa).
+/data/
