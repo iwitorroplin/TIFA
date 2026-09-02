@@ -9,7 +9,7 @@ from src.logic.steriflow.config import SteriflowSettings, ensure_config_file, lo
 from src.logic.steriflow.logs.history import last_backup_time
 from src.logic.steriflow.logs.logger import Logger
 
-_AGENT_LOG_FILENAME = "steriflow_agent.log"
+AGENT_LOG_FILENAME = "steriflow_agent.log"
 
 
 class SteriflowController:
@@ -71,7 +71,7 @@ class SteriflowController:
                 self._scheduler.stop()
 
     def _start_scheduler_locked(self) -> None:
-        agent_logger = Logger(self.settings.paths.logs_root / _AGENT_LOG_FILENAME)
+        agent_logger = Logger(self.settings.paths.logs_root / AGENT_LOG_FILENAME)
         scheduler = Scheduler(
             self.settings.schedule.execution_hours,
             self.backup_service.run,

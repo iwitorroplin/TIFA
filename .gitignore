@@ -8,9 +8,12 @@ venv/
 build/
 dist/
 
-# Config editada desde la app; la versionada es machines.default.yaml,
-# que la app copia sola cuando esta no existe.
-config/machines.yaml
+# Config editada desde la app, una por módulo; las versionadas son los
+# *.default.yaml, que la app copia sola cuando la real todavía no existe.
+config/steriflow.yaml
+config/ferlo.yaml
+config/macona.yaml
+config/pasteurization.yaml
 
 # Carpetas de staging/logs por defecto de los backups (ruta relativa al programa).
 /data/

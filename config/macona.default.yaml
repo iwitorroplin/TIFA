@@ -1,0 +1,3 @@
+# Macona todavía no tiene lógica propia, así que este fichero no tiene campos
+# todavía. Cuando los tenga, se leerán igual que en steriflow.default.yaml:
+# ver src/config/files.py.

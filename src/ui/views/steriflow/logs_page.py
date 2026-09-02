@@ -3,29 +3,47 @@ from __future__ import annotations
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QCheckBox,
-    QComboBox,
     QHBoxLayout,
+    QHeaderView,
     QPlainTextEdit,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from src.logic.steriflow.controller import SteriflowController
-from src.logic.steriflow.logs.files import LogTailer, list_log_files
+from src.logic.steriflow.logs.files import LogTailer
+from src.logic.steriflow.logs.history import list_backup_logs
 
 _POLL_INTERVAL_MS = 1000
+_COL_DATE = 0
+_COL_TIME = 1
 
 
 class SteriflowLogsPage(QWidget):
+    """Historial de ejecuciones de backup: steriflow_agent.log vive en la vista
+    global de Logs del navbar, no aquí. Con varias ejecuciones al día, la tabla
+    es lo que escala; un combo con decenas de entradas no."""
+
     def __init__(self, controller: SteriflowController):
         super().__init__()
 
         self._controller = controller
         self._tailer = None
+        self._current_path = None
+        self._rows: list[tuple] = []  # (datetime, Path) por fila, más reciente primero
 
-        self._file_combo = QComboBox()
-        self._file_combo.currentIndexChanged.connect(self._on_file_selected)
+        self._table = QTableWidget(0, 2)
+        self._table.setHorizontalHeaderLabels(["Fecha", "Hora"])
+        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.itemSelectionChanged.connect(self._on_row_selected)
 
         self._follow_checkbox = QCheckBox("Seguir")
         self._follow_checkbox.setChecked(True)
@@ -39,12 +57,13 @@ class SteriflowLogsPage(QWidget):
         )
 
         top_layout = QHBoxLayout()
-        top_layout.addWidget(self._file_combo, 1)
+        top_layout.addStretch()
         top_layout.addWidget(self._follow_checkbox)
 
         layout = QVBoxLayout(self)
         layout.addLayout(top_layout)
-        layout.addWidget(self._text_view)
+        layout.addWidget(self._table, 1)
+        layout.addWidget(self._text_view, 2)
 
         self._timer = QTimer(self)
         self._timer.setInterval(_POLL_INTERVAL_MS)
@@ -52,7 +71,7 @@ class SteriflowLogsPage(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self._refresh_file_list(select_latest=self._file_combo.currentIndex() < 0)
+        self._refresh_table(select_latest=self._current_path is None)
         self._timer.start()
 
     def hideEvent(self, event):
@@ -62,46 +81,53 @@ class SteriflowLogsPage(QWidget):
     def _logs_directory(self):
         return self._controller.settings.paths.logs_root
 
-    def _refresh_file_list(self, select_latest: bool):
-        files = list_log_files(self._logs_directory())
-        current_path = self._file_combo.currentData()
+    def _refresh_table(self, select_latest: bool):
+        self._rows = list_backup_logs(self._logs_directory())
 
-        self._file_combo.blockSignals(True)
-        self._file_combo.clear()
-        for file in files:
-            self._file_combo.addItem(file.name, file)
-        self._file_combo.blockSignals(False)
+        self._table.blockSignals(True)
+        self._table.setRowCount(len(self._rows))
+        for row, (moment, _path) in enumerate(self._rows):
+            self._table.setItem(row, _COL_DATE, QTableWidgetItem(moment.strftime("%d/%m/%Y")))
+            self._table.setItem(row, _COL_TIME, QTableWidgetItem(moment.strftime("%H:%M:%S")))
+        self._table.blockSignals(False)
 
-        if not files:
+        if not self._rows:
+            self._current_path = None
             self._tailer = None
             self._text_view.clear()
             return
 
         if select_latest:
-            self._select_file(files[0])
-        elif current_path in files:
-            self._file_combo.setCurrentIndex(files.index(current_path))
-        else:
-            self._select_file(files[0])
-
-    def _select_file(self, path):
-        index = self._file_combo.findData(path)
-        if index >= 0:
-            self._file_combo.setCurrentIndex(index)
-        else:
-            self._load_file(path)
-
-    def _on_file_selected(self, index):
-        path = self._file_combo.itemData(index)
-        if path is None:
+            self._select_row(0)
             return
 
-        files = list_log_files(self._logs_directory())
-        is_latest = bool(files) and path == files[0]
-        self._follow_checkbox.setChecked(is_latest)
-        self._load_file(path)
+        for row, (_moment, path) in enumerate(self._rows):
+            if path == self._current_path:
+                self._select_row(row)
+                return
 
-    def _load_file(self, path):
+        self._select_row(0)
+
+    def _select_row(self, row: int):
+        # Selección programática: no dependemos de itemSelectionChanged (no
+        # dispara si la fila ya estaba seleccionada), cargamos el contenido
+        # explícitamente siempre.
+        self._table.blockSignals(True)
+        self._table.selectRow(row)
+        self._table.blockSignals(False)
+        self._load_row(row)
+
+    def _on_row_selected(self):
+        row = self._table.currentRow()
+        if row < 0 or row >= len(self._rows):
+            return
+
+        self._follow_checkbox.setChecked(row == 0)
+        self._load_row(row)
+
+    def _load_row(self, row: int):
+        path = self._rows[row][1]
+        self._current_path = path
         self._tailer = LogTailer(path)
         try:
             self._text_view.setPlainText(path.read_text(encoding="utf-8", errors="replace"))
@@ -111,9 +137,11 @@ class SteriflowLogsPage(QWidget):
         self._scroll_to_bottom()
 
     def _poll(self):
-        files = list_log_files(self._logs_directory())
-        if self._follow_checkbox.isChecked() and files and self._file_combo.currentData() != files[0]:
-            self._refresh_file_list(select_latest=True)
+        latest = list_backup_logs(self._logs_directory())
+        latest_path = latest[0][1] if latest else None
+
+        if self._follow_checkbox.isChecked() and latest_path is not None and self._current_path != latest_path:
+            self._refresh_table(select_latest=True)
             return
 
         if self._tailer is None:

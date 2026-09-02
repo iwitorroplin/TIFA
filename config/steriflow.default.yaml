@@ -1,0 +1,37 @@
+# Ruta relativa a la carpeta del propio programa (se resuelve contra ella
+# mientras no sea absoluta). Es solo el punto de partida del primer arranque:
+# se edita desde la pestaña de Configuración con la ruta real de logs.
+logs_root: 'data/steriflow/logs'
+execution_hours: ["05:00", "08:00", "12:00", "16:00", "20:00"]
+# path_folder, local_folder y backup_folder van SIEMPRE entre comillas
+# simples: entre comillas dobles YAML interpreta \E como escape y falla al
+# cargar la configuración.
+# path_folder: carpeta compartida (UNC) de la propia autoclave, de la que se
+# traen sus PDF (recurso de red: si la máquina está apagada, no es alcanzable).
+# local_folder: carpeta local de staging de esa autoclave en el PC de TIFA.
+# backup_folder: carpeta del servidor de almacenamiento a la que se replica.
+autoclaves:
+  - name: AUTOCLAVE6
+    ip: "10.109.1.191"
+    path_folder: '\\AUTOCLAVE6\Export'
+    local_folder: 'data/steriflow/local/AUTOCLAVE6'
+    backup_folder: '\\SERVIDOR\Backups\AUTOCLAVE6'
+    active: true
+  - name: AUTOCLAVE7
+    ip: "10.109.1.192"
+    path_folder: '\\AUTOCLAVE7\Export'
+    local_folder: 'data/steriflow/local/AUTOCLAVE7'
+    backup_folder: '\\SERVIDOR\Backups\AUTOCLAVE7'
+    active: true
+  - name: AUTOCLAVE8
+    ip: "10.109.1.189"
+    path_folder: '\\AUTOCLAVE8\Export'
+    local_folder: 'data/steriflow/local/AUTOCLAVE8'
+    backup_folder: '\\SERVIDOR\Backups\AUTOCLAVE8'
+    active: true
+  - name: AUTOCLAVE9
+    ip: "10.109.1.133"
+    path_folder: '\\AUTOCLAVE9\Export'
+    local_folder: 'data/steriflow/local/AUTOCLAVE9'
+    backup_folder: '\\SERVIDOR\Backups\AUTOCLAVE9'
+    active: true

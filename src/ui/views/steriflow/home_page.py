@@ -66,13 +66,17 @@ class SteriflowHomePage(QWidget):
     def _build_backup_actions_group(self):
         group = QGroupBox("Acciones de Backup")
 
-        self._run_button = AppButton("Ejecutar backup")
+        self._fetch_button = AppButton("Traer de las máquinas")
+        self._fetch_button.clicked.connect(self._on_fetch_clicked)
+
+        self._run_button = AppButton("Backup a servidor")
         self._run_button.clicked.connect(self._on_run_clicked)
 
         self._stop_button = AppButton("Detener backup", color="#e20c0c")
         self._stop_button.clicked.connect(self._on_stop_clicked)
 
         group_layout = QHBoxLayout(group)
+        group_layout.addWidget(self._fetch_button)
         group_layout.addWidget(self._run_button)
         group_layout.addWidget(self._stop_button)
 
@@ -103,17 +107,30 @@ class SteriflowHomePage(QWidget):
 
         return group
 
+    def _on_fetch_clicked(self):
+        self._backup_runner.run(
+            source="home_page",
+            action=self._controller.backup_service.fetch,
+            done_message="Traída desde las máquinas finalizada.",
+        )
+
     def _on_run_clicked(self):
-        self._backup_runner.run(source="home_page")
+        self._backup_runner.run(
+            source="home_page",
+            action=self._controller.backup_service.backup,
+            done_message="Backup finalizado.",
+        )
 
     def _on_stop_clicked(self):
         self._controller.stop()
         self._refresh_status_labels()
 
     def _on_backup_started(self):
+        self._fetch_button.setEnabled(False)
         self._run_button.setEnabled(False)
 
     def _on_backup_finished(self, message):
+        self._fetch_button.setEnabled(True)
         self._run_button.setEnabled(True)
         self._refresh_status_labels()
 
