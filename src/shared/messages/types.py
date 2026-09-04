@@ -5,12 +5,17 @@ class MessageType(Enum):
     """Severidad de un mensaje. Determina qué personaje lo dice y de qué
     color se tiñe (ver src/shared/characters/senders.py):
     info -> Yufi, success -> Tifa, warning -> Cloud, error -> Sephiroth.
+
+    DEBUG es la excepción: no lo dice ningún personaje. `MessageManager.push`
+    fuerza `Delivery.SILENT` siempre que el tipo sea DEBUG, así que no hace
+    falta (ni tiene sentido) darle entrada en SENDERS/ACCENT_COLORS.
     """
 
     INFO = "info"
     SUCCESS = "success"
     WARNING = "warning"
     ERROR = "error"
+    DEBUG = "debug"
 
 
 class Module(Enum):

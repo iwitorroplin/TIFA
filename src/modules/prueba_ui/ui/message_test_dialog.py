@@ -13,6 +13,7 @@ _BUTTON_LABELS: dict[MessageType, str] = {
     MessageType.SUCCESS: "Success",
     MessageType.WARNING: "Warning",
     MessageType.ERROR: "Error",
+    MessageType.DEBUG: "Debug",
 }
 
 
@@ -57,11 +58,6 @@ class MessageTestDialog(QDialog):
         send_test_message(message_type, delivery)
 
     def _on_message_pushed(self, message: Message) -> None:
-        # "DEBUG" aquí es solo cómo se etiqueta en ESTE log un mensaje sin
-        # personaje, sea cual sea su severidad real -no toca MessageType (que
-        # sigue determinando color/personaje si delivery es CHARACTER), así
-        # que ninguna infraestructura compartida se entera de este nivel.
-        level = "DEBUG" if message.delivery is Delivery.SILENT else message.type.name
         self._log.appendPlainText(
-            f"[{message.timestamp:%H:%M:%S}] [{message.module.name}] [{level}] {message.text}"
+            f"[{message.timestamp:%H:%M:%S}] [{message.module.name}] [{message.type.name}] {message.text}"
         )

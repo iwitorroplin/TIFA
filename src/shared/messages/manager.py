@@ -27,6 +27,10 @@ class MessageManager(QObject):
         text: str,
         delivery: Delivery = Delivery.CHARACTER,
     ) -> Message:
+        # DEBUG es silencioso siempre, sin excepción: ni pasando
+        # delivery=CHARACTER se le puede poner un personaje a hablar.
+        if type is MessageType.DEBUG:
+            delivery = Delivery.SILENT
         message = Message(module=module, type=type, text=text, delivery=delivery)
         self._history.append(message)
         self.messagePushed.emit(message)

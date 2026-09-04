@@ -13,7 +13,9 @@ _TEXTS: dict[MessageType, str] = {
     MessageType.INFO: "Mensaje de prueba: esto es solo información.",
     MessageType.SUCCESS: "Mensaje de prueba: la operación de ejemplo salió bien.",
     MessageType.WARNING: "Mensaje de prueba: revisa esto, aunque no es grave.",
-    MessageType.ERROR: "Mensaje de prueba: algo ha fallado en el ejemplo.",
+    MessageType.ERROR: "Mensaje de prueba: algo ha fallado en el ejemplo. Y es MUY LARRRRRRRRRRRRRGOOOOOOOOOOOOOOOOOOOOO"
+    "",
+    MessageType.DEBUG: "Mensaje de prueba: detalle interno, sin personaje asignado.",
 }
 
 
