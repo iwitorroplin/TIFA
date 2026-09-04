@@ -13,6 +13,19 @@ AGENT_LOG_FILENAME = "steriflow_agent.log"
 BACKUP_LOG_PREFIX = "steriflow_backup_"
 
 
+"""
+añadimos un controlador de que las maquinas estan activas
+
+si no estan activas hacer un backup es una perdida de recursos
+si ademas de estar activas os arquivos no se han modificado desde el ultimo backup, no tiene sentido hacer un backup
+
+¿que mas condiciones?
+
+"""
+
+
+
+
 class SteriflowController:
     """Mantiene viva la configuración de Steriflow y su scheduler, y permite
     recargarlos desde disco (por ejemplo, tras guardar cambios en la pestaña de
