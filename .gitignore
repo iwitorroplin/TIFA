@@ -8,12 +8,9 @@ venv/
 build/
 dist/
 
-# Config editada desde la app, una por módulo; las versionadas son los
-# *Config.default.yaml, que la app copia sola cuando la real todavía no existe.
-config/steriflowConfig.yaml
-config/ferloConfig.yaml
-config/maconaConfig.yaml
-config/pasteurizationConfig.yaml
+# Config editada desde la app; las versionadas son las de appConfigDefault/,
+# que la app copia sola a appConfig/ cuando la real todavía no existe.
+/config/appConfig/
 
 # Carpetas de staging/logs por defecto de los backups (ruta relativa al programa).
 /data/

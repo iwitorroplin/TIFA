@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from datetime import time
 from pathlib import Path
 
-from src.config.files import ensure_config_file as _ensure_config_file
-from src.config.files import load_config, save_config
-from src.config.paths import resolve_path
+from src.shared.config.manager import ensure_config_file as _ensure_config_file
+from src.shared.config.manager import load_config, save_config
+from src.shared.paths import resolve_path
 
 _MODULE = "steriflow"
 

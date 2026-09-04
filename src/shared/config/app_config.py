@@ -1,14 +1,13 @@
 """Configuración estática de la app (nombre, descripción...): lee
-`config/appConfig.yaml`. A diferencia de Ferlo/Steriflow/Macona/Pasteurización
-(ver files.py), no tiene `.default.yaml` ni edición desde la interfaz: viene
-ya versionada con el repo, así que solo hace falta leerla.
+`appConfig/appConfig.yaml`, generado a partir de `appConfig.default.yaml` la
+primera vez que se ejecuta (ver manager.py).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.config.files import load_config
+from src.shared.config.manager import ensure_config_file, load_config
 
 _MODULE = "app"
 
@@ -25,6 +24,7 @@ class AppSettings:
 
 
 def load_settings() -> AppSettings:
+    ensure_config_file(_MODULE)
     raw = load_config(_MODULE)
     app = raw["app"]
     ui = raw["ui"]
