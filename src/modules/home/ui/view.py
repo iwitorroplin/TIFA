@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from src.shared.config.app_config import load_settings as load_app_settings
 from src.shared.assets.resources import (
     MIDGAR_IMAGE,
-    APP_LOGO,
+    APP_LOGO_V2,
     )
 
 
@@ -33,7 +33,7 @@ class HomeView(QWidget):
 
         # Logo de la app, centrado en la vista. APP_LOGO es un SVG vectorial.
         image_logo = QLabel()
-        image_logo.setPixmap(QPixmap(str(APP_LOGO)))
+        image_logo.setPixmap(QPixmap(str(APP_LOGO_V2)))
         image_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(image_logo)
 

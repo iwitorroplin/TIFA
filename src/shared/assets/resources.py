@@ -21,6 +21,7 @@ UI_ICON = ICONS_DIR / "ui.ico"
 # LOGO
 
 APP_LOGO = IMAGES_DIR / "app_logo.svg"
+APP_LOGO_V2 = IMAGES_DIR / "app_logo_v2.svg"
 
 # characters
 TIFA = CHARACTERS_DIR / "tifa.svg"
