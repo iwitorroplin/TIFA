@@ -7,12 +7,13 @@ description: Thermal Integration & F₀ Analysis
 # Structure
 
 - assets: componentes visuales
-- config: configuracion de la app y los modulos
+- config: configuracion de la app y los modulos (`appConfig/` real, `appConfigDefault/` versionado)
 - logs: logs de la app y de los modulos
 - data: only for develop, sera la ruta default para los backup y lo que sea necesario
 - src: codigo fuente
-    - config: codigo para la configuraciond e la app
-    - assets: codigo para el manejo de assets
+    - app: cascaron de la app (MainWindow, Navbar, TrayApp) — ni modulo ni shared
+    - modules: un paquete por modulo de negocio
+    - shared: todo lo transversal a los modulos
 
 **future features**
 
@@ -31,7 +32,7 @@ description: Thermal Integration & F₀ Analysis
 **images** : only file .svg and png
 - background:
     - dado que la imagen es muy detallada e renderizado es lento se usa .png
-- caracters: personajes usados para mandar informacion de log, avisos de procesos, ... 
+- characters: personajes usados para mandar informacion de log, avisos de procesos, ...
     - info -> Yufi
     - success -> Tifa
     - warning -> Cloud
@@ -41,18 +42,13 @@ description: Thermal Integration & F₀ Analysis
 - other: caja desastre lo que aun no tiene suficiente cuerpo como para tener carpeta propia
     - folders
 
-
-
-*si renderizado de svg es mucha carga*
-*se transformaran los archivos y las rutas para optimizar* 
-
 ---
 
 # config: .yaml
 
 separamos 2 carpetas:
 
-**appConfig**: editable y el que leeremos
+**appConfig**: editable y el que leeremos (sin versionar, `.gitignore` ignora la carpeta entera)
 
 - appConfig.yaml
 - steriflowConfig.yaml
@@ -60,7 +56,7 @@ separamos 2 carpetas:
 - maconaConfig.yaml
 - pasteurizationConfig.yaml
 
-**appConfigDefault**: valores por defecto "si es necesario estaran con los valores en blanco"
+**appConfigDefault**: valores por defecto, versionados; la app copia el que falte a `appConfig/` la primera vez que se ejecuta
 - appConfig.default.yaml
 - steriflowConfig.default.yaml
 - ferloConfig.default.yaml
@@ -78,95 +74,46 @@ se añadiran si es necesario
 
 ---
 
-# src/config
+# src/shared
 
-propuesta_optimizacion
+Todo lo transversal a los modulos, para que ninguno tenga que reinventarlo:
 
-- path.py
-    - rutas de la configuracion
-- manager.py
-    - API principal
-    - gestion de errores
-    - restaurar
-    - etc.
-- loader.py
-    - leer YAML
-- writer.py
-    - escribir YAML
+- `paths.py`: unico ancla `PROJECT_ROOT` del proyecto (antes duplicada como `parents[N]` en cinco sitios distintos)
+- `assets/`: `paths.py` (carpetas) + `resources.py` (constantes de icono/imagen)
+- `config/`: `paths.py`, `loader.py`, `writer.py`, `manager.py` (`ensure_config_file`, `load_config`, `save_config`, `restore_defaults`), `app_config.py`
+- `db/`: `connection.py` + `schema.py` (registro `register_schema`/`ensure_schema` — no conoce a ningun modulo) + `iso.py`
+- `logs/`: `logger.py`, `files.py`, `history.py` (genericos, parametrizados por prefijo de fichero)
+- `messages/`: `types.py` (`MessageType`, `Module`, `Delivery`), `message.py`, `manager.py` — que se dice y quien lo origina
+- `characters/`: `senders.py`, `portrait.py`, `message_box.py`, `message_bar.py` — quien lo dice y como se ve; descarta los mensajes `Delivery.SILENT` antes de mostrar personaje/popup
+- `ui/`: `formatting.py` + `components/` (botones, tab bar, barras de carga, tail de log)
+- `utils/folders.py`
 
 ---
 
-# src/assets
+# src/modules
 
-propuesta_optimizacion
+Un paquete por modulo, cada uno con su propio corte vertical:
 
-- path.py
-    - rutas de los assets 
+```
+src/modules/<modulo>/
+├── ui/          vistas, tab bar, paginas propias del modulo
+├── logic/       reglas de negocio, config, acceso a datos del modulo
+├── utils/       utilidades que no encajan en shared/ por ser especificas del modulo
+└── messages/    catalogo de textos que emite el modulo via shared/messages
+```
 
-ejemplo:
-from src.config.paths import PROJECT_ROOT
-ASSETS_DIR = PROJECT_ROOT / "assets"
+Steriflow es el unico modulo con contenido real (`logic/` con backup, sterilization, scheduler, config propia; `ui/` con sus 4 pestañas). Home, Ferlo, Macona, Pasteurizacion, Config, Logs y Prueba UI son esqueletos con `ui/view.py`.
 
-ICONS_DIR = ASSETS_DIR / "icons"
-IMAGES_DIR = ASSETS_DIR / "images"
-
-CHARACTERS_DIR = IMAGES_DIR / "characters"
-MATERIAS_DIR = IMAGES_DIR / "materias"
-OTHERS_DIR = IMAGES_DIR / "others"
-BACKGROUND_DIR = IMAGES_DIR / "background"
-
-*app_logo.svg donde lo añadirias* 
-
-
-- resources.py
-    - los recursos usados (altual assets.py)
+`src/modules/registry.py` es el **composition root**: la unica lista (`MODULES: list[ModuleSpec]`) de la que Navbar y MainWindow generan sus botones/paginas en el mismo orden, y de la que `__main__.py` registra el esquema de base de datos de cada modulo. Ningun modulo importa `registry.py` — evita el ciclo con el propio modulo que el registro ensambla.
 
 ---
 
-# REFACTOR IMPORTANTE
+# src/app
 
-**Cambio principal de la estructura**
-**Permite Escalar mas comodamente**
-**Dudad sobre los mensajes los gestionamos por modulo? algunos son muy distintos**
-**Propuesta de mensajes: en module_characters la gestion de mensajes basica y dentro del modulo especificaciones?**
-  
-src/
-│
-├── module_home/ (inicio actual modulo home)
-│
-├── module_characters/ (modulo de control de los caracteres tifa, yufi, cloud, serfirot) 
-│
-├── module_a/
-│   ├── ui/
-│   │   ├── dashboard.py
-│   │   ├── config.py
-│   │   ├── tab_bar.py
-│   │   └── components/
-│   │       └── ...
-│   │
-│   ├── logic/
-│   ├── utils/
-│   └── messages/ ()
-|
-├── module_b/
-│   ├── ui/
-│   │   ├── dashboard.py
-│   │   ├── config.py
-│   │   ├── tab_bar.py
-│   │   └── components/
-│   │       └── ...
-│   │
-│   ├── logic/
-│   ├── utils/
-│   └── messages/
-|
-└── shared/
-│   ├── ui/
-|   └── components/
-│   ├── logic/
-│   ├── utils/
-|   ├── messages/
-|   ├── components/
-|   └── ...
-│
-└── ...
+El cascaron de la aplicacion: `window_app.py` (`MainWindow`), `nav_bar.py` (`Navbar`), `tray_app.py` (`TrayApp`). Construyen la ventana a partir de `src.modules.registry.MODULES`, sin conocer a ningun modulo por su nombre.
+
+---
+
+# Herramientas
+
+`tools/check_imports.py`: importa cada modulo bajo `src/` y reporta cualquier fallo. No hay tests en el repo; es la unica red de seguridad ante una refactorizacion o un movimiento de ficheros.

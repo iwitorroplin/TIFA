@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QHBoxLayout, QMainWindow, QStackedWidget, QWidget
 from src.modules.registry import MODULES
 from src.shared.assets.resources import UI_ICON
 from src.shared.characters.message_bar import MessageBar
-from src.ui.nav_bar import Navbar
+from src.app.nav_bar import Navbar
 
 
 class MainWindow(QMainWindow):

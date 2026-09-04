@@ -4,8 +4,8 @@ from PySide6.QtWidgets import QApplication
 
 from src.modules.registry import MODULES
 from src.shared.db.schema import register_schema
-from src.ui.tray_app import TrayApp
-from src.ui.window_app import MainWindow
+from src.app.tray_app import TrayApp
+from src.app.window_app import MainWindow
 
 
 def _bootstrap() -> None:
