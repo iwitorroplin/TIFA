@@ -2,13 +2,13 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import QMessageBox, QPushButton, QToolButton
 
-from src.ui.assets import (
+from src.shared.assets.resources import (
     FOLDER_IMAGE,
     MATERIA_STARTER_IMAGE,
     MATERIA_STOP_IMAGE
 )
 
-from utils.folders import open_folder
+from src.utils.folders import open_folder
 
 
 def _button_colors(color):

@@ -2,7 +2,7 @@ from PySide6.QtGui import QPainter, QPixmap, Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from src.config.app_config import load_settings as load_app_settings
-from src.ui.assets import (
+from src.shared.assets.resources import (
     MIDGAR_IMAGE,
     APP_LOGO,
     )

@@ -1,7 +1,7 @@
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from src.ui.assets import TRAY_ICON
+from src.shared.assets.resources import TRAY_ICON
 
 
 class TrayApp(QSystemTrayIcon):

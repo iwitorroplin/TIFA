@@ -1,7 +1,7 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QApplication, QButtonGroup, QVBoxLayout, QWidget
 
-from src.ui.assets import (
+from src.shared.assets.resources import (
     APP_ICON,
 )
 from src.ui.components.nav_button import add_nav_button as _add_nav_button

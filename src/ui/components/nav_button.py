@@ -2,7 +2,7 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import QGraphicsDropShadowEffect, QPushButton
 
-from src.ui.assets import (
+from src.shared.assets.resources import (
     MATERIA_BLUE_IMAGE,
     MATERIA_YELLOW_IMAGE,
     )

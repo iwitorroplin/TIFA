@@ -6,7 +6,7 @@ from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
-from src.ui.assets import CLOUD, SEPHIROTH, TIFA, YUFI
+from src.shared.assets.resources import CLOUD, SEPHIROTH, TIFA, YUFI
 from src.ui.messages.types import MessageType, Module
 
 
@@ -55,7 +55,7 @@ ACCENT_COLORS: dict[MessageType, QColor] = {
 }
 
 
-# Los retratos (assets/images/caracters/*.svg) son solo dos colores: fondo
+# Los retratos (assets/images/characters/*.svg) son solo dos colores: fondo
 # blanco ("background") y tinta negra ("shape"). En vez de mantener un SVG
 # por personaje y color, se retiñe el fondo en tiempo real.
 _WHITE_FILL = "fill:#ffffff"

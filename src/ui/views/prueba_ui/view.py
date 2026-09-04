@@ -9,7 +9,7 @@ from src.ui.components.app_button import AppButton
 from src.ui.components.loading_bar import LoadingBar
 from src.ui.components.loading_dialog import LoadingDialog
 
-from src.ui.assets import (
+from src.shared.assets.resources import (
     APP_ICON,
     APP_LOGO,
     TIFA,

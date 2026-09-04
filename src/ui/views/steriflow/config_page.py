@@ -31,7 +31,7 @@ from src.logic.steriflow.config import (
     save_settings,
 )
 from src.logic.steriflow.network import MachineStatus
-from src.ui.assets import MATERIA_GREEN_IMAGE, MATERIA_RED_IMAGE, MATERIA_YELLOW_IMAGE
+from src.shared.assets.resources import MATERIA_GREEN_IMAGE, MATERIA_RED_IMAGE, MATERIA_YELLOW_IMAGE
 from src.ui.components.app_button import AppButton
 from src.ui.views.steriflow.status_checker import AutoclaveStatusChecker
 

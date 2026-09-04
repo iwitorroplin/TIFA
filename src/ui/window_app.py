@@ -1,9 +1,9 @@
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QHBoxLayout, QMainWindow, QStackedWidget, QWidget
 
-from src.ui.assets import UI_ICON
+from src.shared.assets.resources import UI_ICON
 from src.ui.message_bar import MessageBar
-from ui.nav_bar import Navbar
+from src.ui.nav_bar import Navbar
 from src.ui.views.config import ConfigView
 from src.ui.views.ferlo import FerloView
 from src.ui.views.home import HomeView

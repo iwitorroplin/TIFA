@@ -1,4 +1,4 @@
-from src.ui.assets import APP_ICON
+from src.shared.assets.resources import APP_ICON
 from src.ui.components.tab_bar import TabBar
 
 
