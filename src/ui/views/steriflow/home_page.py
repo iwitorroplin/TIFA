@@ -20,8 +20,8 @@ from src.shared.ui.components.app_button import (
 )
 
 from src.shared.ui.formatting import format_moment
-from src.ui.messages.manager import manager
-from src.ui.messages.types import MessageType, Module
+from src.shared.messages.manager import manager
+from src.shared.messages.types import MessageType, Module
 from src.ui.views.steriflow.backup_runner import BackupRunner
 from src.ui.views.steriflow.status_checker import AutoclaveStatusChecker
 

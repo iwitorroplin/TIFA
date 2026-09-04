@@ -11,8 +11,9 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
 )
 
-from src.ui.messages.messages import ACCENT_COLORS, SENDERS, tinted_portrait
-from src.ui.messages.types import MessageType
+from src.shared.characters.portrait import tinted_portrait
+from src.shared.characters.senders import ACCENT_COLORS, SENDERS
+from src.shared.messages.types import MessageType
 
 _PORTRAIT_SIZE = 96
 

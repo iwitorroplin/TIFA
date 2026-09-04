@@ -2,10 +2,12 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from src.ui.components.message_box import MessageBox
-from src.ui.messages.manager import manager
-from src.ui.messages.messages import ACCENT_COLORS, Message, SENDERS, tinted_portrait
-from src.ui.messages.types import MessageType
+from src.shared.characters.message_box import MessageBox
+from src.shared.characters.portrait import tinted_portrait
+from src.shared.characters.senders import ACCENT_COLORS, SENDERS
+from src.shared.messages.manager import manager
+from src.shared.messages.message import Message
+from src.shared.messages.types import Delivery, MessageType
 
 _PORTRAIT_SIZE = 96
 
@@ -61,6 +63,10 @@ class MessageBar(QWidget):
             label.setPixmap(tinted_portrait(sender, color, _PORTRAIT_SIZE))
 
     def _on_message_pushed(self, message: Message) -> None:
+        if message.delivery is Delivery.SILENT:
+            # Ya quedó en manager.history; no lo anuncia ningún personaje.
+            return
+
         if self._message_box is not None:
             self._message_box.close()
 
