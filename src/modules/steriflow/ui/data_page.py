@@ -79,6 +79,14 @@ def _format_duration(seconds: int | None) -> str:
 def _format_temp(value: float | None) -> str:
     return "—" if value is None else f"{value:.2f}"
 
+# _build_print_html y _print_row_html generan el HTML que se pasa a QTextDocument para imprimir. 
+# Se hace así en vez de con un QTableWidget porque QTextDocument permite paginar automáticamente, mientras que QTableWidget no.
+# Problema_1: si la tabla es muy larga, el QTableWidget no se puede imprimir en varias páginas. Con QTextDocument sí.
+# Problema_2: la talba se veria mejor en horizontal
+#   añadiremos en la fucnion build la opcion de orientacion.
+# asignar por defecto DIN-A4 
+
+
 
 def _build_print_html(cycles: list[SterilizationCycle]) -> str:
     filas = "".join(_print_row_html(c) for c in cycles)
