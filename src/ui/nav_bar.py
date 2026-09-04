@@ -1,9 +1,7 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QApplication, QButtonGroup, QVBoxLayout, QWidget
 
-from src.shared.assets.resources import (
-    APP_ICON,
-)
+from src.modules.registry import MODULES
 from src.shared.ui.components.nav_button import add_nav_button as _add_nav_button
 
 
@@ -24,17 +22,13 @@ class Navbar(QWidget):
         self._group.setExclusive(True)
         self._group.idClicked.connect(self.currentChanged)
 
-        # Solo "Home" lleva un icono propio (el logo de la app, fijo); el
-        # resto usa el punto "materia" que NavButton colorea según el estado.
-        self.add_nav_button("Home", APP_ICON, color="#3f51b5")
-        self.add_nav_button("Ferlo")
-        self.add_nav_button("Steriflow")
-        self.add_nav_button("Macona")
-        self.add_nav_button("Pasteurization")
-        self.add_nav_button("Configuración")
-        self.add_nav_button("Logs")
-        self.add_nav_button("Prueba UI")
-        self.add_nav_button("Salir",color="#ca4646", callback=QApplication.quit)
+        # Un botón por módulo registrado, en su mismo orden (ver
+        # src/modules/registry.py); MainWindow apila sus páginas con el
+        # mismo recorrido, así que el índice de cada botón siempre coincide
+        # con el de su página sin mantener dos listas a mano.
+        for spec in MODULES:
+            self.add_nav_button(spec.label, spec.icon, color=spec.color)
+        self.add_nav_button("Salir", color="#ca4646", callback=QApplication.quit)
 
     def add_nav_button(self, label, icon=None, color=None, checkable=True, callback=None):
         return _add_nav_button(

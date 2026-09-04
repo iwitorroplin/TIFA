@@ -1,17 +1,10 @@
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QHBoxLayout, QMainWindow, QStackedWidget, QWidget
 
+from src.modules.registry import MODULES
 from src.shared.assets.resources import UI_ICON
 from src.shared.characters.message_bar import MessageBar
 from src.ui.nav_bar import Navbar
-from src.ui.views.config import ConfigView
-from src.ui.views.ferlo import FerloView
-from src.ui.views.home import HomeView
-from src.ui.views.logs import LogsView
-from src.ui.views.macona import MaconaView
-from src.ui.views.pasteurization import PasteurizationView
-from src.ui.views.prueba_ui import PruebaUIView
-from src.ui.views.steriflow import SteriflowView
 
 
 class MainWindow(QMainWindow):
@@ -26,15 +19,13 @@ class MainWindow(QMainWindow):
 
         self._navbar = Navbar()
 
+        # Una página por módulo registrado, en el mismo orden que Navbar
+        # recorre para sus botones (ver src/modules/registry.py): los dos
+        # se generan de la misma lista, así que nunca pueden desincronizarse
+        # por índice.
         self._pages = QStackedWidget()
-        self._pages.addWidget(HomeView())
-        self._pages.addWidget(FerloView())
-        self._pages.addWidget(SteriflowView())
-        self._pages.addWidget(MaconaView())
-        self._pages.addWidget(PasteurizationView())
-        self._pages.addWidget(ConfigView())
-        self._pages.addWidget(LogsView())
-        self._pages.addWidget(PruebaUIView())
+        for spec in MODULES:
+            self._pages.addWidget(spec.view())
 
         self._navbar.currentChanged.connect(self._pages.setCurrentIndex)
 
