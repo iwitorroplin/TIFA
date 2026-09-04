@@ -5,6 +5,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import QGroupBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from src.modules.prueba_ui.ui.message_test_dialog import MessageTestDialog
 from src.shared.ui.components.app_button import AppButton
 from src.shared.ui.components.loading_bar import LoadingBar
 from src.shared.ui.components.loading_dialog import LoadingDialog
@@ -47,6 +48,7 @@ class PruebaUIView(QWidget):
         super().__init__()
 
         self._progress_value = 0
+        self._message_dialog = None
 
         self._progress_timer = QTimer(self)
         self._progress_timer.setInterval(_PROGRESS_TICK_MS)
@@ -57,6 +59,7 @@ class PruebaUIView(QWidget):
         layout.addWidget(self._build_loading_dialog_group())
         layout.addWidget(self._build_images_group())
         layout.addWidget(self._build_icons_group())
+        layout.addWidget(self._build_messages_group())
         layout.addStretch()
 
     def showEvent(self, event):
@@ -139,6 +142,24 @@ class PruebaUIView(QWidget):
         row_layout.addStretch()
 
         return group
+
+    def _build_messages_group(self):
+        group = QGroupBox("Mensajes de personajes")
+
+        show_button = AppButton("Abrir diálogo de mensajes")
+        show_button.clicked.connect(self._show_message_dialog)
+
+        group_layout = QVBoxLayout(group)
+        group_layout.addWidget(show_button)
+
+        return group
+
+    def _show_message_dialog(self):
+        if self._message_dialog is None:
+            self._message_dialog = MessageTestDialog(self)
+        self._message_dialog.show()
+        self._message_dialog.raise_()
+        self._message_dialog.activateWindow()
 
 
 
