@@ -13,6 +13,7 @@ from src.ui.assets import (
     APP_ICON,
     APP_LOGO,
     TIFA,
+    YUFI,
     CLOUD,
     SEPHIROTH,
     MATERIA_BLUE_IMAGE,
@@ -20,11 +21,10 @@ from src.ui.assets import (
     MATERIA_PURPLE_IMAGE,
     MATERIA_RED_IMAGE,
     MATERIA_YELLOW_IMAGE,
-    MATERIA_BLUE_ICON,
-    MATERIA_GREEN_ICON,
-    MATERIA_PURPLE_ICON,
-    MATERIA_RED_ICON,
-    MATERIA_YELLOW_ICON,
+    WINDOW_ICON,
+    TRAY_ICON,
+    UI_ICON,
+    FOLDER_IMAGE,
 )
 
 _PROGRESS_TICK_MS = 150
@@ -107,7 +107,7 @@ class PruebaUIView(QWidget):
     def _build_images_group(self):
         group = QGroupBox("Imágenes SVG de prueba")
 
-        images = [APP_LOGO, TIFA, CLOUD, SEPHIROTH, *_MATERIA_IMAGES]
+        images = [APP_LOGO, TIFA, YUFI, CLOUD, SEPHIROTH, FOLDER_IMAGE, *_MATERIA_IMAGES]
 
         row_layout = QHBoxLayout(group)
         for image_path in images:
@@ -123,11 +123,9 @@ class PruebaUIView(QWidget):
 
         icons = [
             APP_ICON,
-            MATERIA_BLUE_ICON,
-            MATERIA_GREEN_ICON,
-            MATERIA_PURPLE_ICON,
-            MATERIA_RED_ICON,
-            MATERIA_YELLOW_ICON,
+            WINDOW_ICON,
+            TRAY_ICON,
+            UI_ICON,
         ]
 
         row_layout = QHBoxLayout(group)

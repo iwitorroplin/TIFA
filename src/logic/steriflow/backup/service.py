@@ -3,10 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+from src.db.connection import connect
 from src.logic.steriflow.backup.robocopy import run_robocopy
 from src.logic.steriflow.config import AutoclaveConfig, SteriflowSettings
 from src.logic.steriflow.logs.logger import Logger
 from src.logic.steriflow.network import is_reachable
+from src.logic.steriflow.sterilization import service as sterilization_service
 
 _LOG_TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
 
@@ -58,14 +60,21 @@ class BackupService:
                 logger.log(f"[{autoclave.name}] ERROR trayendo PDF de la autoclave: {ex}")
 
     def _backup_all(self, logger: Logger) -> None:
-        for autoclave in self._settings.autoclaves:
-            if not autoclave.active:
-                logger.log(f"[{autoclave.name}] Inactiva, se omite")
-                continue
-            try:
-                self._backup_autoclave(autoclave, logger)
-            except Exception as ex:
-                logger.log(f"[{autoclave.name}] ERROR replicando hacia el servidor: {ex}")
+        # Una única conexión para todo el backup: se abre y se cierra aquí en
+        # vez de en cada autoclave, y en este hilo -nunca el de la interfaz-,
+        # que es el único que la usa (ver `BackupRunner`).
+        conn = connect()
+        try:
+            for autoclave in self._settings.autoclaves:
+                if not autoclave.active:
+                    logger.log(f"[{autoclave.name}] Inactiva, se omite")
+                    continue
+                try:
+                    self._backup_autoclave(autoclave, logger, conn)
+                except Exception as ex:
+                    logger.log(f"[{autoclave.name}] ERROR replicando hacia el servidor: {ex}")
+        finally:
+            conn.close()
 
     def _fetch_autoclave(self, autoclave: AutoclaveConfig, logger: Logger) -> None:
         local_path = Path(autoclave.local_folder)
@@ -90,7 +99,7 @@ class BackupService:
                 f"desde {autoclave.path_folder}"
             )
 
-    def _backup_autoclave(self, autoclave: AutoclaveConfig, logger: Logger) -> None:
+    def _backup_autoclave(self, autoclave: AutoclaveConfig, logger: Logger, conn) -> None:
         local_path = Path(autoclave.local_folder)
         server_path = Path(autoclave.backup_folder)
 
@@ -110,6 +119,9 @@ class BackupService:
         # Destino como string crudo, no str(server_path): igual que con
         # path_folder, Path le añadiría una barra final a un recurso pelado.
         run_robocopy(autoclave.local_folder, autoclave.backup_folder, "*.pdf", logger)
+
+        logger.log(f"[{autoclave.name}] PASO 6: extrae el dato de esterilización de los PDF nuevos")
+        sterilization_service.process(conn, autoclave.name, local_path, server_path, logger)
 
     @staticmethod
     def _find_new_reports(local_path: Path, server_path: Path) -> list[Path]:

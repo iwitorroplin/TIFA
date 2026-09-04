@@ -20,6 +20,7 @@ class SteriflowController:
     def __init__(self, settings: SteriflowSettings) -> None:
         self._lock = threading.Lock()
         self._scheduler: Scheduler | None = None
+        self._auto_enabled = False
         self._run_now_lock = threading.Lock()
         self._run_now_in_progress = False
 
@@ -50,6 +51,11 @@ class SteriflowController:
         scheduler = self._scheduler
         return scheduler.next_execution if scheduler is not None else None
 
+    @property
+    def auto_enabled(self) -> bool:
+        """Si los backups programados por horario están activos o el usuario los paró."""
+        return self._auto_enabled
+
     def start(self) -> None:
         with self._lock:
             self._start_scheduler_locked()
@@ -62,15 +68,23 @@ class SteriflowController:
             if self._scheduler is not None:
                 self._scheduler.stop()
 
-            self._start_scheduler_locked()
+            # Recargar config (p. ej. tras guardar en la pestaña de
+            # Configuración) no debe reactivar el modo automático si el
+            # usuario lo había parado a mano.
+            if self._auto_enabled:
+                self._start_scheduler_locked()
 
     def stop(self) -> None:
-        """Solo detiene el scheduler: no cancela un backup manual en curso."""
+        """Para el modo automático: no cancela un backup manual en curso."""
         with self._lock:
             if self._scheduler is not None:
                 self._scheduler.stop()
+            self._auto_enabled = False
 
     def _start_scheduler_locked(self) -> None:
+        if self._scheduler is not None:
+            self._scheduler.stop()
+
         agent_logger = Logger(self.settings.paths.logs_root / AGENT_LOG_FILENAME)
         scheduler = Scheduler(
             self.settings.schedule.execution_hours,
@@ -78,6 +92,7 @@ class SteriflowController:
             agent_logger,
         )
         self._scheduler = scheduler
+        self._auto_enabled = True
         threading.Thread(target=scheduler.run, daemon=True).start()
 
 

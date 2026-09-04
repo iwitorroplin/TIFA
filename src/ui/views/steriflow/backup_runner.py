@@ -22,6 +22,7 @@ class BackupRunner(QObject):
 
     started = Signal()
     finished = Signal(str)
+    failed = Signal(str)
     already_running = Signal()
 
     def __init__(self, controller: SteriflowController) -> None:
@@ -57,6 +58,6 @@ class BackupRunner(QObject):
             self.finished.emit(done_message)
         except Exception as ex:
             agent_logger.log(f"ERROR en backup manual: {ex}")
-            self.finished.emit(f"Error durante el backup: {ex}")
+            self.failed.emit(f"Error durante el backup: {ex}")
         finally:
             self._controller.finish_run_now()

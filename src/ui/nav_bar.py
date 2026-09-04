@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QApplication, QButtonGroup, QVBoxLayout, QWidget
 from src.ui.assets import (
     APP_ICON,
 )
-from src.ui.components.nav_button import NavButton
+from src.ui.components.nav_button import add_nav_button as _add_nav_button
 
 
 class Navbar(QWidget):
@@ -37,31 +37,12 @@ class Navbar(QWidget):
         self.add_nav_button("Salir",color="#ca4646", callback=QApplication.quit)
 
     def add_nav_button(self, label, icon=None, color=None, checkable=True, callback=None):
-        """Un solo punto de entrada para los botones del navbar.
-
-        Con `callback` es una acción suelta (p. ej. "Salir"): no entra en el
-        grupo exclusivo y se ancla al final, bajo el stretch. Sin `callback`
-        es una pestaña de navegación: entra en el grupo exclusivo, se marca
-        sola si es la primera, y se inserta antes del stretch.
-        """
-        is_action = callback is not None
-        button = NavButton(
+        return _add_nav_button(
+            self._layout,
+            self._group,
             label,
             icon=icon,
             color=color,
-            checkable=False if is_action else checkable,
+            checkable=checkable,
+            callback=callback,
         )
-
-        if is_action:
-            button.clicked.connect(callback)
-            self._layout.addWidget(button)
-            return button
-
-        index = len(self._group.buttons())
-        self._group.addButton(button, index)
-        self._layout.insertWidget(index, button)
-
-        if index == 0:
-            button.setChecked(True)
-
-        return button

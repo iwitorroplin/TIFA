@@ -1,12 +1,26 @@
 from __future__ import annotations
 
 import subprocess
+from enum import Enum
 
 _PING_TIMEOUT_MS = 2000
 
 
-def is_reachable(ip_address: str) -> bool:
-    """Ping de una sola vez: True solo si llega un eco real de la propia IP.
+class MachineStatus(Enum):
+    """Resultado de comprobar una IP. Ver `check_machine_status`."""
+
+    ONLINE = "online"
+    # El propio router respondió "destino inaccesible": no hay ningún
+    # dispositivo respondiendo en esa IP, lo más probable es que esté
+    # apagada o desconectada de la red.
+    OFFLINE = "offline"
+    # Ni eco ni "inaccesible": no se sabe por qué (firewall, cable, la propia
+    # red local...), no se puede asumir que la máquina esté apagada.
+    CONNECTION_ERROR = "connection_error"
+
+
+def check_machine_status(ip_address: str) -> MachineStatus:
+    """Ping de una sola vez, distinguiendo por qué no responde.
 
     No basta con `returncode == 0`: si un router intermedio no sabe llegar al
     destino, responde "Host de destino inaccesible" — ping.exe lo cuenta como
@@ -24,6 +38,16 @@ def is_reachable(ip_address: str) -> bool:
             text=True,
             errors="replace",
         )
-        return result.returncode == 0 and "TTL=" in result.stdout.upper()
     except OSError:
-        return False
+        return MachineStatus.CONNECTION_ERROR
+
+    output = result.stdout.upper()
+    if result.returncode == 0 and "TTL=" in output:
+        return MachineStatus.ONLINE
+    if "INACCESIBLE" in output or "UNREACHABLE" in output:
+        return MachineStatus.OFFLINE
+    return MachineStatus.CONNECTION_ERROR
+
+
+def is_reachable(ip_address: str) -> bool:
+    return check_machine_status(ip_address) == MachineStatus.ONLINE

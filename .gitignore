@@ -9,11 +9,11 @@ build/
 dist/
 
 # Config editada desde la app, una por módulo; las versionadas son los
-# *.default.yaml, que la app copia sola cuando la real todavía no existe.
-config/steriflow.yaml
-config/ferlo.yaml
-config/macona.yaml
-config/pasteurization.yaml
+# *Config.default.yaml, que la app copia sola cuando la real todavía no existe.
+config/steriflowConfig.yaml
+config/ferloConfig.yaml
+config/maconaConfig.yaml
+config/pasteurizationConfig.yaml
 
 # Carpetas de staging/logs por defecto de los backups (ruta relativa al programa).
 /data/

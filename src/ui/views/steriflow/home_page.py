@@ -2,20 +2,30 @@ from __future__ import annotations
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
+    QCheckBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QVBoxLayout,
     QWidget,
 )
 
 from src.logic.steriflow.controller import SteriflowController
 from src.logic.steriflow.logs.logger import Logger
-from src.ui.components.app_button import AppButton
-from src.ui.folders import open_folder
+from src.logic.steriflow.network import MachineStatus
+from src.ui.components.app_button import (
+    AppButton,
+    AppFolderButton,
+    AppStartButton,
+)
+
 from src.ui.formatting import format_moment
+from src.ui.messages.manager import manager
+from src.ui.messages.types import MessageType, Module
 from src.ui.views.steriflow.backup_runner import BackupRunner
+from src.ui.views.steriflow.status_checker import AutoclaveStatusChecker
+
+
 
 _STATUS_REFRESH_INTERVAL_MS = 60_000
 _AGENT_LOG_FILENAME = "steriflow_agent.log"
@@ -30,7 +40,12 @@ class SteriflowHomePage(QWidget):
         self._backup_runner = BackupRunner(controller)
         self._backup_runner.started.connect(self._on_backup_started)
         self._backup_runner.finished.connect(self._on_backup_finished)
+        self._backup_runner.failed.connect(self._on_backup_failed)
         self._backup_runner.already_running.connect(self._on_backup_already_running)
+
+        self._connectivity_checker = AutoclaveStatusChecker(self)
+        self._connectivity_checker.checked.connect(self._on_connectivity_checked)
+        self._pending_connectivity_checks: dict[str, MachineStatus | None] = {}
 
         self._status_timer = QTimer(self)
         self._status_timer.setInterval(_STATUS_REFRESH_INTERVAL_MS)
@@ -57,55 +72,87 @@ class SteriflowHomePage(QWidget):
         self._last_backup_label = QLabel()
         self._next_backup_label = QLabel()
 
+        self._auto_mode_checkbox = QCheckBox("Backups automáticos activados")
+        self._auto_mode_checkbox.setChecked(self._controller.auto_enabled)
+        self._auto_mode_checkbox.toggled.connect(self._on_auto_mode_toggled)
+
         group_layout = QVBoxLayout(group)
         group_layout.addWidget(self._last_backup_label)
         group_layout.addWidget(self._next_backup_label)
+        group_layout.addWidget(self._auto_mode_checkbox)
 
         return group
 
     def _build_backup_actions_group(self):
         group = QGroupBox("Acciones de Backup")
 
-        self._fetch_button = AppButton("Traer de las máquinas")
+        self._check_button = AppButton("Comprobar conexión")
+        self._check_button.clicked.connect(self._on_check_clicked)
+
+        self._fetch_button = AppStartButton("Importar (máquinas a local)")
         self._fetch_button.clicked.connect(self._on_fetch_clicked)
 
-        self._run_button = AppButton("Backup a servidor")
+        self._run_button = AppStartButton("Exportar (local a servidor)")
         self._run_button.clicked.connect(self._on_run_clicked)
 
-        self._stop_button = AppButton("Detener backup", color="#e20c0c")
-        self._stop_button.clicked.connect(self._on_stop_clicked)
-
         group_layout = QHBoxLayout(group)
+        group_layout.addWidget(self._check_button)
         group_layout.addWidget(self._fetch_button)
         group_layout.addWidget(self._run_button)
-        group_layout.addWidget(self._stop_button)
+        group_layout.addStretch()
 
         return group
 
     def _build_open_folders_group(self):
         group = QGroupBox("Abrir carpetas")
 
-        open_logs_button = AppButton("Abrir carpeta de log")
-        open_logs_button.clicked.connect(
-            lambda: self._open_folder(self._controller.settings.paths.logs_root, create=True)
-        )
+        logger = Logger(self._controller.settings.paths.logs_root / _AGENT_LOG_FILENAME)
+        paths = self._controller.settings.paths
 
-        open_local_button = AppButton("Abrir carpeta local")
-        open_local_button.clicked.connect(
-            lambda: self._open_folder(self._controller.settings.paths.local_root, create=True)
-        )
-
-        open_server_button = AppButton("Abrir carpeta de servidor")
-        open_server_button.clicked.connect(
-            lambda: self._open_folder(self._controller.settings.paths.server_root, create=False)
-        )
+        open_logs_button = AppFolderButton("Abrir logs", paths.logs_root, logger, create=True)
+        open_local_button = AppFolderButton("Abrir Local", paths.local_root, logger, create=True)
+        open_server_button = AppFolderButton("Abrir Servidor", paths.server_root, logger, create=False)
 
         group_layout = QHBoxLayout(group)
         group_layout.addWidget(open_logs_button)
         group_layout.addWidget(open_local_button)
         group_layout.addWidget(open_server_button)
+        group_layout.addStretch()
 
         return group
+
+    def _on_check_clicked(self):
+        autoclaves = [a for a in self._controller.settings.autoclaves if a.active]
+        if not autoclaves:
+            manager.push(Module.STERIFLOW, MessageType.WARNING, "No hay autoclaves activas configuradas.")
+            return
+
+        self._check_button.setEnabled(False)
+        self._pending_connectivity_checks = {autoclave.name: None for autoclave in autoclaves}
+        self._connectivity_checker.check([(a.name, a.ip) for a in autoclaves])
+
+    def _on_connectivity_checked(self, name, status: MachineStatus):
+        if name not in self._pending_connectivity_checks:
+            return
+        self._pending_connectivity_checks[name] = status
+        if any(value is None for value in self._pending_connectivity_checks.values()):
+            return
+
+        self._check_button.setEnabled(True)
+        results = self._pending_connectivity_checks
+        all_online = all(value is MachineStatus.ONLINE for value in results.values())
+
+        lines = []
+        for autoclave_name, autoclave_status in results.items():
+            if autoclave_status is MachineStatus.ONLINE:
+                lines.append(f"{autoclave_name}: OK")
+            elif autoclave_status is MachineStatus.OFFLINE:
+                lines.append(f"{autoclave_name}: no ok (apagada o desconectada)")
+            else:
+                lines.append(f"{autoclave_name}: no ok (fallo de conexión)")
+
+        message_type = MessageType.SUCCESS if all_online else MessageType.WARNING
+        manager.push(Module.STERIFLOW, message_type, "\n".join(lines))
 
     def _on_fetch_clicked(self):
         self._backup_runner.run(
@@ -121,8 +168,11 @@ class SteriflowHomePage(QWidget):
             done_message="Backup finalizado.",
         )
 
-    def _on_stop_clicked(self):
-        self._controller.stop()
+    def _on_auto_mode_toggled(self, checked):
+        if checked:
+            self._controller.start()
+        else:
+            self._controller.stop()
         self._refresh_status_labels()
 
     def _on_backup_started(self):
@@ -133,15 +183,18 @@ class SteriflowHomePage(QWidget):
         self._fetch_button.setEnabled(True)
         self._run_button.setEnabled(True)
         self._refresh_status_labels()
+        manager.push(Module.STERIFLOW, MessageType.SUCCESS, message)
+
+    def _on_backup_failed(self, message):
+        self._fetch_button.setEnabled(True)
+        self._run_button.setEnabled(True)
+        self._refresh_status_labels()
+        manager.push(Module.STERIFLOW, MessageType.ERROR, message)
 
     def _on_backup_already_running(self):
-        QMessageBox.information(self, "Backup", "Ya hay un backup en curso.")
-
-    def _open_folder(self, path, create):
-        logger = Logger(self._controller.settings.paths.logs_root / _AGENT_LOG_FILENAME)
-        if not open_folder(path, logger, create=create):
-            QMessageBox.warning(self, "Backup", f"No se pudo abrir la carpeta:\n{path}")
+        manager.push(Module.STERIFLOW, MessageType.WARNING, "Ya hay un backup en curso.")
 
     def _refresh_status_labels(self):
         self._last_backup_label.setText(f"Último backup: {format_moment(self._controller.last_backup)}")
         self._next_backup_label.setText(f"Próximo backup: {format_moment(self._controller.next_execution)}")
+        self._auto_mode_checkbox.setChecked(self._controller.auto_enabled)

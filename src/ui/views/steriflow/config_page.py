@@ -1,8 +1,7 @@
-import threading
 from datetime import time
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QTime, QTimer, Qt, Signal
+from PySide6.QtCore import QTime, QTimer, Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -31,9 +30,10 @@ from src.logic.steriflow.config import (
     SteriflowSettings,
     save_settings,
 )
-from src.logic.steriflow.network import is_reachable
-from src.ui.assets import MATERIA_GREEN_ICON, MATERIA_RED_ICON
+from src.logic.steriflow.network import MachineStatus
+from src.ui.assets import MATERIA_GREEN_IMAGE, MATERIA_RED_IMAGE, MATERIA_YELLOW_IMAGE
 from src.ui.components.app_button import AppButton
+from src.ui.views.steriflow.status_checker import AutoclaveStatusChecker
 
 # Índices de columna de la tabla de autoclaves. Explícitos porque "Activo" es
 # un checkbox: leerlo de la columna equivocada (p. ej. tras insertar una
@@ -56,7 +56,7 @@ class SteriflowConfigPage(QWidget):
 
         self._controller = controller
 
-        self._status_checker = _AutoclaveStatusChecker(self)
+        self._status_checker = AutoclaveStatusChecker(self)
         self._status_checker.checked.connect(self._on_status_checked)
 
         self._status_timer = QTimer(self)
@@ -85,10 +85,24 @@ class SteriflowConfigPage(QWidget):
         self._logs_path_edit = QLineEdit()
         self._logs_path_edit.editingFinished.connect(self._persist)
 
+        self._local_root_edit = QLineEdit()
+        self._local_root_edit.editingFinished.connect(self._persist)
+
+        self._server_root_edit = QLineEdit()
+        self._server_root_edit.editingFinished.connect(self._persist)
+
         group_layout = QFormLayout(group)
         group_layout.addRow(
             "Carpeta de logs:",
             self._build_path_row(self._logs_path_edit),
+        )
+        group_layout.addRow(
+            "Carpeta raíz local:",
+            self._build_path_row(self._local_root_edit),
+        )
+        group_layout.addRow(
+            "Carpeta raíz de servidor:",
+            self._build_path_row(self._server_root_edit),
         )
 
         return group
@@ -149,6 +163,7 @@ class SteriflowConfigPage(QWidget):
         buttons_layout.addWidget(add_button)
         buttons_layout.addWidget(remove_button)
         buttons_layout.addWidget(edit_button)
+        buttons_layout.addStretch()
 
         group_layout = QVBoxLayout(group)
         group_layout.addWidget(self._autoclaves_table)
@@ -266,6 +281,7 @@ class SteriflowConfigPage(QWidget):
         buttons_layout.addWidget(add_button)
         buttons_layout.addWidget(remove_button)
         buttons_layout.addWidget(edit_button)
+        buttons_layout.addStretch()
 
         group_layout = QVBoxLayout(group)
         group_layout.addWidget(self._schedules_table)
@@ -312,6 +328,8 @@ class SteriflowConfigPage(QWidget):
 
     def _load_from_settings(self, settings: SteriflowSettings):
         self._logs_path_edit.setText(str(settings.paths.logs_root))
+        self._local_root_edit.setText(str(settings.paths.local_root))
+        self._server_root_edit.setText(str(settings.paths.server_root))
 
         self._autoclaves_table.setRowCount(0)
         for autoclave in settings.autoclaves:
@@ -348,13 +366,16 @@ class SteriflowConfigPage(QWidget):
         ]
         self._status_checker.check(rows)
 
-    def _on_status_checked(self, name, reachable):
+    def _on_status_checked(self, name, status: MachineStatus):
         row = self._find_autoclave_row(name)
         if row is None:
             return
 
-        icon = MATERIA_GREEN_ICON if reachable else MATERIA_RED_ICON
-        text = "En línea" if reachable else "Sin conexión"
+        icon, text = {
+            MachineStatus.ONLINE: (MATERIA_GREEN_IMAGE, "En línea"),
+            MachineStatus.OFFLINE: (MATERIA_RED_IMAGE, "Apagada"),
+            MachineStatus.CONNECTION_ERROR: (MATERIA_YELLOW_IMAGE, "Fallo de conexión"),
+        }[status]
         status_item = QTableWidgetItem(QIcon(str(icon)), text)
         status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         self._autoclaves_table.setItem(row, _COL_STATUS, status_item)
@@ -372,6 +393,16 @@ class SteriflowConfigPage(QWidget):
         logs_text = self._logs_path_edit.text().strip()
         if not logs_text:
             QMessageBox.warning(self, "Backup", "La carpeta de logs es obligatoria.")
+            return
+
+        local_root_text = self._local_root_edit.text().strip()
+        if not local_root_text:
+            QMessageBox.warning(self, "Backup", "La carpeta raíz local es obligatoria.")
+            return
+
+        server_root_text = self._server_root_edit.text().strip()
+        if not server_root_text:
+            QMessageBox.warning(self, "Backup", "La carpeta raíz de servidor es obligatoria.")
             return
 
         autoclaves = [
@@ -398,6 +429,8 @@ class SteriflowConfigPage(QWidget):
         settings = SteriflowSettings(
             paths=SteriflowPaths(
                 logs_root=Path(logs_text),
+                local_root=Path(local_root_text),
+                server_root=Path(server_root_text),
             ),
             autoclaves=autoclaves,
             schedule=ScheduleConfig(execution_hours=execution_hours),
@@ -528,19 +561,3 @@ class _ScheduleDialog(QDialog):
 
     def value(self):
         return self._time_edit.time()
-
-
-class _AutoclaveStatusChecker(QObject):
-    """Hace ping a cada IP en su propio hilo (hasta 2 s por máquina, ver
-    `is_reachable`) para no congelar la interfaz, y avisa por señal según van
-    llegando los resultados — Qt entrega la señal ya en el hilo de la interfaz,
-    así que el slot conectado puede tocar la tabla sin problema."""
-
-    checked = Signal(str, bool)
-
-    def check(self, name_ip_pairs):
-        for name, ip in name_ip_pairs:
-            threading.Thread(target=self._check_one, args=(name, ip), daemon=True).start()
-
-    def _check_one(self, name, ip):
-        self.checked.emit(name, is_reachable(ip))

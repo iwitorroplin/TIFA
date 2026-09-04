@@ -2,7 +2,8 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QHBoxLayout, QMainWindow, QStackedWidget, QWidget
 
 from src.ui.assets import UI_ICON
-from src.ui.navbar import Navbar
+from src.ui.message_bar import MessageBar
+from ui.nav_bar import Navbar
 from src.ui.views.config import ConfigView
 from src.ui.views.ferlo import FerloView
 from src.ui.views.home import HomeView
@@ -18,7 +19,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("TIFA")
         self.setWindowIcon(QIcon(str(UI_ICON)))
-        self.resize(800, 600)
+        # minimun size to avoid the navbar and the pages to be too small
+        self.setMinimumSize(800, 600)
+        # full screen for default, but the user can resize it if they want
+        self.showMaximized()
 
         self._navbar = Navbar()
 
@@ -34,8 +38,15 @@ class MainWindow(QMainWindow):
 
         self._navbar.currentChanged.connect(self._pages.setCurrentIndex)
 
+        self._message_bar = MessageBar()
+
+        # Tres columnas: navbar (izquierda) | páginas (centro) | message_bar
+        # (derecha), igual de ancho fijo que navbar. Antes MessageBar era un
+        # widget flotante sobre self._pages; ahora es una columna más, así
+        # no necesita reposicionarse a mano en cada resize.
         central = QWidget()
         layout = QHBoxLayout(central)
         layout.addWidget(self._navbar)
         layout.addWidget(self._pages)
+        layout.addWidget(self._message_bar)
         self.setCentralWidget(central)

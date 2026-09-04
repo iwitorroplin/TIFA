@@ -1,54 +1,59 @@
-from PySide6.QtCore import Qt
-from PySide6.QtSvgWidgets import QSvgWidget
+from PySide6.QtGui import QPainter, QPixmap, Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
+from src.config.app_config import load_settings as load_app_settings
 from src.ui.assets import (
-    UI_ICON,
-    TIFA,
-    CLOUD,
-    SEPHIROTH,
+    MIDGAR_IMAGE,
+    APP_LOGO,
     )
 
 
 class HomeView(QWidget):
+    """Cuadro de bienvenida de la app.
+
+    Cuando esté terminada la app, este cuadro será reemplazado por el
+    dashboard de la app. Solo un placeholder mientras tanto.
+    """
+
     def __init__(self):
         super().__init__()
 
-        """
-        Cuadro de bienvenida de la app
+        app_settings = load_app_settings()
 
-        cuando este terminada la app, este cuadro sera reemplazado por el dashboard de la app
-
-        title = QLabel("7th Heaven")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        image_ui = QSvgWidget(str(UI_ICON))
-        image_ui.setFixedSize(160, 160)
-        
-        
-        """
-
-
-        # los añadimos en la esquina a la derecha de la ventana
-        image_tifa = QSvgWidget(str(TIFA))
-        image_tifa.setFixedSize(160, 160)
-        image_cloud = QSvgWidget(str(CLOUD))
-        image_cloud.setFixedSize(160, 160)
-        image_sephiroth = QSvgWidget(str(SEPHIROTH))
-        image_sephiroth.setFixedSize(160, 160)
+        # Fondo de Midgar. MIDGAR_IMAGE es un PNG ya rasterizado desde
+        # Inkscape (ver assets.py): la versión vectorial tardaba segundos en
+        # rasterizarse en cada resize. Se pinta en paintEvent en vez de con
+        # un QLabel hermano: así el logo y los textos, al ser hijos de este
+        # widget, se dibujan siempre encima sin depender de z-order ni de
+        # atributos de transparencia.
+        self._background = QPixmap(str(MIDGAR_IMAGE))
 
         layout = QVBoxLayout(self)
-        layout.addStretch()
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        """
-        layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(image_ui, alignment=Qt.AlignmentFlag.AlignCenter)
-        """
+        # Logo de la app, centrado en la vista. APP_LOGO es un SVG vectorial.
+        image_logo = QLabel()
+        image_logo.setPixmap(QPixmap(str(APP_LOGO)))
+        image_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(image_logo)
 
+        # label de bienvenida, centrado en la vista
+        label_welcome = QLabel(f"Bienvenido a {app_settings.name}")
+        label_welcome.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label_welcome.setStyleSheet(
+            "font-size: 24px; font-weight: bold; color: white; text-shadow: 1px 1px 2px black;"
+        )
+        layout.addWidget(label_welcome)
 
-        # los añadimos en la esquina a la derecha de la ventana
-        # Solo como Placeholder hasta que la app este lista
-        layout.addWidget(image_tifa, alignment=Qt.AlignmentFlag.AlignRight)
-        layout.addWidget(image_cloud, alignment=Qt.AlignmentFlag.AlignRight)
-        layout.addWidget(image_sephiroth, alignment=Qt.AlignmentFlag.AlignRight)
-        layout.addStretch()
+        # descripción + versión, debajo del nombre
+        label_description = QLabel(f"{app_settings.description} · v{app_settings.version}")
+        label_description.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label_description.setStyleSheet(
+            "font-size: 14px; color: white; text-shadow: 1px 1px 2px black;"
+        )
+        layout.addWidget(label_description)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.drawPixmap(self.rect(), self._background)
+        super().paintEvent(event)

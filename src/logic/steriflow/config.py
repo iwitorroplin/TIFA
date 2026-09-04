@@ -1,5 +1,5 @@
 """Configuración de la lógica de backup de Steriflow: lee y escribe
-`config/steriflow.yaml`.
+`config/steriflowConfig.yaml`.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ def _default_path_folder(name: str) -> str:
     """Carpeta origen que se usaba antes de que fuera configurable.
 
     Apaño de migración: una instalación anterior a `path_folder` tiene su
-    steriflow.yaml sin esa clave, y `ensure_config_file` no reescribe un
+    steriflowConfig.yaml sin esa clave, y `ensure_config_file` no reescribe un
     fichero que ya existe, así que la clave nunca llegaría sola desde el
     default. Se reproduce aquí la ruta que estaba hardcodeada en el backup
     para que esa instalación siga copiando igual que ayer. Se puede quitar
@@ -75,6 +75,13 @@ class AutoclaveConfig:
 @dataclass(frozen=True)
 class SteriflowPaths:
     logs_root: Path
+    # local_root/server_root: carpetas raíz donde, por convención, vive la
+    # subcarpeta de cada autoclave (local_root/<nombre>, server_root/<nombre>).
+    # Cada autoclave puede apuntar su local_folder/backup_folder a otro sitio,
+    # pero estas dos son las que abren los botones "Abrir Local"/"Abrir
+    # Servidor" de la home page.
+    local_root: Path
+    server_root: Path
 
 
 @dataclass(frozen=True)
@@ -96,15 +103,14 @@ def ensure_config_file() -> bool:
 def load_settings() -> SteriflowSettings:
     raw = load_config(_MODULE)
 
-    # Solo para alimentar los respaldos de `local_folder`/`backup_folder` en
-    # instalaciones antiguas: ni `local_root` ni `server_root` forman ya parte
-    # de SteriflowPaths, así que no se guardan en ningún dataclass.
-    legacy_local_root = resolve_path(raw.get("local_root", "data/steriflow/local"))
-    legacy_server_root = resolve_path(raw.get("server_root", "data/steriflow/server"))
+    local_root = resolve_path(raw.get("local_root", "data/steriflow/local"))
+    server_root = resolve_path(raw.get("server_root", "data/steriflow/server"))
 
     return SteriflowSettings(
         paths=SteriflowPaths(
             logs_root=resolve_path(raw["logs_root"]),
+            local_root=local_root,
+            server_root=server_root,
         ),
         autoclaves=[
             AutoclaveConfig(
@@ -112,9 +118,9 @@ def load_settings() -> SteriflowSettings:
                 ip=item["ip"],
                 path_folder=item.get("path_folder") or _default_path_folder(item["name"]),
                 local_folder=item.get("local_folder")
-                or _default_local_folder(item["name"], legacy_local_root),
+                or _default_local_folder(item["name"], local_root),
                 backup_folder=item.get("backup_folder")
-                or _default_backup_folder(item["name"], legacy_server_root),
+                or _default_backup_folder(item["name"], server_root),
                 active=item["active"],
             )
             for item in raw["autoclaves"]
@@ -130,6 +136,8 @@ def load_settings() -> SteriflowSettings:
 def save_settings(settings: SteriflowSettings) -> None:
     save_config(_MODULE, {
         "logs_root": str(settings.paths.logs_root),
+        "local_root": str(settings.paths.local_root),
+        "server_root": str(settings.paths.server_root),
         "execution_hours": [
             hour.strftime("%H:%M") for hour in settings.schedule.execution_hours
         ],

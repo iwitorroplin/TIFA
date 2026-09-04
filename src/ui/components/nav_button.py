@@ -3,8 +3,8 @@ from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import QGraphicsDropShadowEffect, QPushButton
 
 from src.ui.assets import (
-    MATERIA_BLUE_ICON,
-    MATERIA_YELLOW_ICON,
+    MATERIA_BLUE_IMAGE,
+    MATERIA_YELLOW_IMAGE,
     )
 
 # MATERIA BLUE PARA BOTON STANDAR
@@ -29,8 +29,8 @@ class NavButton(QPushButton):
         # sin icono, el botón usa el punto "materia" que cambia de color
         # según el estado (ver comentario de arriba).
         self._fixed_icon = icon is not None
-        self._icon_standard = QIcon(str(icon if icon is not None else MATERIA_BLUE_ICON))
-        self._icon_active = self._icon_standard if self._fixed_icon else QIcon(str(MATERIA_YELLOW_ICON))
+        self._icon_standard = QIcon(str(icon if icon is not None else MATERIA_BLUE_IMAGE))
+        self._icon_active = self._icon_standard if self._fixed_icon else QIcon(str(MATERIA_YELLOW_IMAGE))
         self.setIcon(self._icon_standard)
         self.toggled.connect(self._update_icon)
 
@@ -77,3 +77,35 @@ class NavButton(QPushButton):
             return
         active = self.underMouse() or self.isChecked()
         self.setIcon(self._icon_active if active else self._icon_standard)
+
+
+def add_nav_button(layout, group, label, icon=None, color=None, checkable=True, callback=None):
+    """Crea un NavButton y lo añade a `layout`/`group`. Punto de entrada
+    compartido por Navbar y TabBar para no repetir el cableado.
+
+    Con `callback` es una acción suelta (p. ej. "Salir"): no entra en el
+    grupo exclusivo y se ancla al final, bajo el stretch. Sin `callback`
+    es una pestaña de navegación: entra en el grupo exclusivo, se marca
+    sola si es la primera, y se inserta antes del stretch.
+    """
+    is_action = callback is not None
+    button = NavButton(
+        label,
+        icon=icon,
+        color=color,
+        checkable=False if is_action else checkable,
+    )
+
+    if is_action:
+        button.clicked.connect(callback)
+        layout.addWidget(button)
+        return button
+
+    index = len(group.buttons())
+    group.addButton(button, index)
+    layout.insertWidget(index, button)
+
+    if index == 0:
+        button.setChecked(True)
+
+    return button

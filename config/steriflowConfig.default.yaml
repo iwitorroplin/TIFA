@@ -1,15 +1,17 @@
 # Ruta relativa a la carpeta del propio programa (se resuelve contra ella
 # mientras no sea absoluta). Es solo el punto de partida del primer arranque:
-# se edita desde la pestaña de Configuración con la ruta real de logs.
-logs_root: 'data/steriflow/logs'
-execution_hours: ["05:00", "08:00", "12:00", "16:00", "20:00"]
-# path_folder, local_folder y backup_folder van SIEMPRE entre comillas
-# simples: entre comillas dobles YAML interpreta \E como escape y falla al
-# cargar la configuración.
-# path_folder: carpeta compartida (UNC) de la propia autoclave, de la que se
-# traen sus PDF (recurso de red: si la máquina está apagada, no es alcanzable).
-# local_folder: carpeta local de staging de esa autoclave en el PC de TIFA.
-# backup_folder: carpeta del servidor de almacenamiento a la que se replica.
+# se edita desde la pestaña de Configuración con las rutas reales.
+logs_root: "data/steriflow/logs"
+local_root: "data/steriflow/local"
+server_root: "data/steriflow/server"
+execution_hours: [
+  "05:00",
+  "08:00",
+  "12:00",
+  "16:00",
+  "20:00"
+  ]
+
 autoclaves:
   - name: AUTOCLAVE6
     ip: "10.109.1.191"
