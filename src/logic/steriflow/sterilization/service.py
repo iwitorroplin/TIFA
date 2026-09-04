@@ -10,7 +10,7 @@ import sqlite3
 from pathlib import Path
 
 from src.logic.steriflow.config import SteriflowSettings
-from src.logic.steriflow.logs.logger import Logger
+from src.shared.logs.logger import Logger
 from src.logic.steriflow.sterilization import repo
 from src.logic.steriflow.sterilization.hashing import sha256_of
 from src.logic.steriflow.sterilization.reader import SteriflowReadError, read_report

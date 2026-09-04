@@ -32,7 +32,7 @@ from src.logic.steriflow.config import (
 )
 from src.logic.steriflow.network import MachineStatus
 from src.shared.assets.resources import MATERIA_GREEN_IMAGE, MATERIA_RED_IMAGE, MATERIA_YELLOW_IMAGE
-from src.ui.components.app_button import AppButton
+from src.shared.ui.components.app_button import AppButton
 from src.ui.views.steriflow.status_checker import AutoclaveStatusChecker
 
 # Índices de columna de la tabla de autoclaves. Explícitos porque "Activo" es

@@ -10,16 +10,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.logic.steriflow.controller import SteriflowController
-from src.logic.steriflow.logs.logger import Logger
+from src.logic.steriflow.controller import AGENT_LOG_FILENAME, SteriflowController
+from src.shared.logs.logger import Logger
 from src.logic.steriflow.network import MachineStatus
-from src.ui.components.app_button import (
+from src.shared.ui.components.app_button import (
     AppButton,
     AppFolderButton,
     AppStartButton,
 )
 
-from src.ui.formatting import format_moment
+from src.shared.ui.formatting import format_moment
 from src.ui.messages.manager import manager
 from src.ui.messages.types import MessageType, Module
 from src.ui.views.steriflow.backup_runner import BackupRunner
@@ -28,7 +28,6 @@ from src.ui.views.steriflow.status_checker import AutoclaveStatusChecker
 
 
 _STATUS_REFRESH_INTERVAL_MS = 60_000
-_AGENT_LOG_FILENAME = "steriflow_agent.log"
 
 
 class SteriflowHomePage(QWidget):
@@ -106,7 +105,7 @@ class SteriflowHomePage(QWidget):
     def _build_open_folders_group(self):
         group = QGroupBox("Abrir carpetas")
 
-        logger = Logger(self._controller.settings.paths.logs_root / _AGENT_LOG_FILENAME)
+        logger = Logger(self._controller.settings.paths.logs_root / AGENT_LOG_FILENAME)
         paths = self._controller.settings.paths
 
         open_logs_button = AppFolderButton("Abrir logs", paths.logs_root, logger, create=True)

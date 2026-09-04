@@ -6,7 +6,7 @@ import threading
 from datetime import datetime, time, timedelta
 from typing import Callable, Iterable
 
-from src.logic.steriflow.logs.logger import Logger
+from src.shared.logs.logger import Logger
 
 
 class Scheduler:

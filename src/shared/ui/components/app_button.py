@@ -8,7 +8,7 @@ from src.shared.assets.resources import (
     MATERIA_STOP_IMAGE
 )
 
-from src.utils.folders import open_folder
+from src.shared.utils.folders import open_folder
 
 
 def _button_colors(color):

@@ -23,12 +23,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.db.connection import connect
+from src.shared.db.connection import connect
 from src.logic.steriflow.config import load_settings
 from src.logic.steriflow.sterilization import repo
 from src.logic.steriflow.sterilization import service as sterilization_service
 from src.logic.steriflow.sterilization.models import SterilizationCycle
-from src.ui.components.app_button import AppButton
+from src.shared.ui.components.app_button import AppButton
 
 _COL_AUTOCLAVE = 0
 _COL_STARTED_AT = 1

@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from src.db.connection import connect
+from src.shared.db.connection import connect
 from src.logic.steriflow.backup.robocopy import run_robocopy
 from src.logic.steriflow.config import AutoclaveConfig, SteriflowSettings
-from src.logic.steriflow.logs.logger import Logger
+from src.shared.logs.logger import Logger
 from src.logic.steriflow.network import is_reachable
 from src.logic.steriflow.sterilization import service as sterilization_service
 

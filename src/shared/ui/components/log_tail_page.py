@@ -6,7 +6,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QPlainTextEdit, QVBoxLayout, QWidget
 
-from src.logic.steriflow.logs.files import LogTailer
+from src.shared.logs.files import LogTailer
 
 _POLL_INTERVAL_MS = 1000
 

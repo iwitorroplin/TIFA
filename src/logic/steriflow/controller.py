@@ -6,10 +6,11 @@ from datetime import datetime
 from src.logic.steriflow.backup.scheduler import Scheduler
 from src.logic.steriflow.backup.service import BackupService
 from src.logic.steriflow.config import SteriflowSettings, ensure_config_file, load_settings
-from src.logic.steriflow.logs.history import last_backup_time
-from src.logic.steriflow.logs.logger import Logger
+from src.shared.logs.history import last_backup_time
+from src.shared.logs.logger import Logger
 
 AGENT_LOG_FILENAME = "steriflow_agent.log"
+BACKUP_LOG_PREFIX = "steriflow_backup_"
 
 
 class SteriflowController:
@@ -43,7 +44,7 @@ class SteriflowController:
     @property
     def last_backup(self) -> datetime | None:
         """Cuándo terminó el último backup, deducido de los logs en disco."""
-        return last_backup_time(self.settings.paths.logs_root)
+        return last_backup_time(self.settings.paths.logs_root, BACKUP_LOG_PREFIX)
 
     @property
     def next_execution(self) -> datetime | None:

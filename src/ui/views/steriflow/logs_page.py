@@ -14,9 +14,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.logic.steriflow.controller import SteriflowController
-from src.logic.steriflow.logs.files import LogTailer
-from src.logic.steriflow.logs.history import list_backup_logs
+from src.logic.steriflow.controller import BACKUP_LOG_PREFIX, SteriflowController
+from src.shared.logs.files import LogTailer
+from src.shared.logs.history import list_backup_logs
 
 _POLL_INTERVAL_MS = 1000
 _COL_DATE = 0
@@ -82,7 +82,7 @@ class SteriflowLogsPage(QWidget):
         return self._controller.settings.paths.logs_root
 
     def _refresh_table(self, select_latest: bool):
-        self._rows = list_backup_logs(self._logs_directory())
+        self._rows = list_backup_logs(self._logs_directory(), BACKUP_LOG_PREFIX)
 
         self._table.blockSignals(True)
         self._table.setRowCount(len(self._rows))
@@ -137,7 +137,7 @@ class SteriflowLogsPage(QWidget):
         self._scroll_to_bottom()
 
     def _poll(self):
-        latest = list_backup_logs(self._logs_directory())
+        latest = list_backup_logs(self._logs_directory(), BACKUP_LOG_PREFIX)
         latest_path = latest[0][1] if latest else None
 
         if self._follow_checkbox.isChecked() and latest_path is not None and self._current_path != latest_path:

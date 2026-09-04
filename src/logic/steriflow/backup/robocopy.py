@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import subprocess
 
-from src.logic.steriflow.logs.logger import Logger
+from src.shared.logs.logger import Logger
 
 
 def run_robocopy(source: str, destination: str, file_mask: str, logger: Logger) -> int:

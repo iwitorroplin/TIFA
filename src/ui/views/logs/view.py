@@ -3,7 +3,7 @@ from PySide6.QtWidgets import QLabel, QStackedWidget, QVBoxLayout, QWidget
 
 from src.logic.steriflow.config import load_settings
 from src.logic.steriflow.controller import AGENT_LOG_FILENAME
-from src.ui.components.log_tail_page import LogTailPage
+from src.shared.ui.components.log_tail_page import LogTailPage
 from src.ui.views.logs.tab_bar import LogsTabBar
 
 

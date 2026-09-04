@@ -5,10 +5,8 @@ from typing import Callable, Optional
 
 from PySide6.QtCore import QObject, Signal
 
-from src.logic.steriflow.controller import SteriflowController
-from src.logic.steriflow.logs.logger import Logger
-
-_AGENT_LOG_FILENAME = "steriflow_agent.log"
+from src.logic.steriflow.controller import AGENT_LOG_FILENAME, SteriflowController
+from src.shared.logs.logger import Logger
 
 
 class BackupRunner(QObject):
@@ -44,7 +42,7 @@ class BackupRunner(QObject):
             return False
 
         run_action = action or self._controller.backup_service.run
-        agent_logger = Logger(self._controller.settings.paths.logs_root / _AGENT_LOG_FILENAME)
+        agent_logger = Logger(self._controller.settings.paths.logs_root / AGENT_LOG_FILENAME)
         agent_logger.log(f"Backup manual iniciado desde {source}")
         self.started.emit()
         threading.Thread(

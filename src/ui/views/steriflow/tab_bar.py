@@ -1,5 +1,5 @@
 from src.shared.assets.resources import APP_ICON
-from src.ui.components.tab_bar import TabBar
+from src.shared.ui.components.tab_bar import TabBar
 
 
 class SteriflowTabBar(TabBar):

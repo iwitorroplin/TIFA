@@ -1,7 +1,7 @@
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QWidget
 
-from src.ui.components.nav_button import add_nav_button
+from src.shared.ui.components.nav_button import add_nav_button
 
 
 class TabBar(QWidget):

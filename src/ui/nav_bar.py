@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QApplication, QButtonGroup, QVBoxLayout, QWidget
 from src.shared.assets.resources import (
     APP_ICON,
 )
-from src.ui.components.nav_button import add_nav_button as _add_nav_button
+from src.shared.ui.components.nav_button import add_nav_button as _add_nav_button
 
 
 class Navbar(QWidget):

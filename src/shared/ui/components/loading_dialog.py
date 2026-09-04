@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout
 
-from src.ui.components.loading_bar import LoadingBar
+from src.shared.ui.components.loading_bar import LoadingBar
 
 
 class LoadingDialog(QDialog):

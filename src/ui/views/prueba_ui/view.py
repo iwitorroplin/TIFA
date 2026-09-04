@@ -5,9 +5,9 @@ from PySide6.QtGui import QIcon
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import QGroupBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from src.ui.components.app_button import AppButton
-from src.ui.components.loading_bar import LoadingBar
-from src.ui.components.loading_dialog import LoadingDialog
+from src.shared.ui.components.app_button import AppButton
+from src.shared.ui.components.loading_bar import LoadingBar
+from src.shared.ui.components.loading_dialog import LoadingDialog
 
 from src.shared.assets.resources import (
     APP_ICON,

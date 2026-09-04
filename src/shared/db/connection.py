@@ -9,11 +9,10 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from src.db.schema import ensure_schema
+from src.shared.db.schema import ensure_schema
+from src.shared.paths import DATA_DIR
 
-# src/db/connection.py -> parents[2] es la raíz del repo.
-APP_ROOT = Path(__file__).resolve().parents[2]
-DB_PATH = APP_ROOT / "data" / "tifa.db"
+DB_PATH = DATA_DIR / "tifa.db"
 
 
 def connect(path: Path = DB_PATH) -> sqlite3.Connection:
