@@ -36,11 +36,11 @@ class SteriflowHomePage(QWidget):
 
         self._controller = controller
 
+        # Solo estado de los botones: lo que se le dice al usuario sobre el
+        # backup lo dice el propio log de la acción (ver BackupRunner).
         self._backup_runner = BackupRunner(controller)
         self._backup_runner.started.connect(self._on_backup_started)
         self._backup_runner.finished.connect(self._on_backup_finished)
-        self._backup_runner.failed.connect(self._on_backup_failed)
-        self._backup_runner.already_running.connect(self._on_backup_already_running)
 
         self._connectivity_checker = AutoclaveStatusChecker(self)
         self._connectivity_checker.checked.connect(self._on_connectivity_checked)
@@ -73,7 +73,10 @@ class SteriflowHomePage(QWidget):
 
         self._auto_mode_checkbox = QCheckBox("Backups automáticos activados")
         self._auto_mode_checkbox.setChecked(self._controller.auto_enabled)
-        self._auto_mode_checkbox.toggled.connect(self._on_auto_mode_toggled)
+        # `clicked` y no `toggled`: toggled también salta cuando es la propia
+        # app la que marca la casilla en _refresh_status_labels, y entonces se
+        # anunciaría un cambio que el usuario no ha hecho.
+        self._auto_mode_checkbox.clicked.connect(self._on_auto_mode_toggled)
 
         group_layout = QVBoxLayout(group)
         group_layout.addWidget(self._last_backup_label)
@@ -105,7 +108,7 @@ class SteriflowHomePage(QWidget):
     def _build_open_folders_group(self):
         group = QGroupBox("Abrir carpetas")
 
-        logger = Logger(self._controller.settings.paths.logs_root / AGENT_LOG_FILENAME)
+        logger = self._agent_logger()
         paths = self._controller.settings.paths
 
         open_logs_button = AppFolderButton("Abrir logs", paths.logs_root, logger, create=True)
@@ -119,6 +122,13 @@ class SteriflowHomePage(QWidget):
         group_layout.addStretch()
 
         return group
+
+    def _agent_logger(self) -> Logger:
+        """Nuevo en cada uso, no guardado: la carpeta de logs puede cambiar en
+        la pestaña de configuración mientras la app sigue abierta."""
+        return Logger(
+            self._controller.settings.paths.logs_root / AGENT_LOG_FILENAME, Module.STERIFLOW
+        )
 
     def _on_check_clicked(self):
         autoclaves = [a for a in self._controller.settings.autoclaves if a.active]
@@ -150,48 +160,41 @@ class SteriflowHomePage(QWidget):
             else:
                 lines.append(f"{autoclave_name}: no ok (fallo de conexión)")
 
+        # Respuesta directa a un clic, no un paso de un proceso: no queda
+        # nada que consultar luego en el log, se dice y ya está.
         message_type = MessageType.SUCCESS if all_online else MessageType.WARNING
         manager.push(Module.STERIFLOW, message_type, "\n".join(lines))
 
     def _on_fetch_clicked(self):
-        self._backup_runner.run(
-            source="home_page",
-            action=self._controller.backup_service.fetch,
-            done_message="Traída desde las máquinas finalizada.",
-        )
+        self._backup_runner.run(source="home_page", action=self._controller.backup_service.fetch)
 
     def _on_run_clicked(self):
-        self._backup_runner.run(
-            source="home_page",
-            action=self._controller.backup_service.backup,
-            done_message="Backup finalizado.",
-        )
+        self._backup_runner.run(source="home_page", action=self._controller.backup_service.backup)
 
     def _on_auto_mode_toggled(self, checked):
         if checked:
             self._controller.start()
         else:
             self._controller.stop()
+
+        # Al log además de decirlo: que la automatización lleve dos semanas
+        # apagada y no haya rastro de cuándo se apagó es lo que convierte un
+        # despiste en un agujero de trazabilidad.
+        estado = "activados" if checked else "desactivados"
+        self._agent_logger().log(
+            f"Backups automáticos {estado} a mano desde la interfaz",
+            talk=MessageType.INFO,
+        )
         self._refresh_status_labels()
 
     def _on_backup_started(self):
         self._fetch_button.setEnabled(False)
         self._run_button.setEnabled(False)
 
-    def _on_backup_finished(self, message):
+    def _on_backup_finished(self):
         self._fetch_button.setEnabled(True)
         self._run_button.setEnabled(True)
         self._refresh_status_labels()
-        manager.push(Module.STERIFLOW, MessageType.SUCCESS, message)
-
-    def _on_backup_failed(self, message):
-        self._fetch_button.setEnabled(True)
-        self._run_button.setEnabled(True)
-        self._refresh_status_labels()
-        manager.push(Module.STERIFLOW, MessageType.ERROR, message)
-
-    def _on_backup_already_running(self):
-        manager.push(Module.STERIFLOW, MessageType.WARNING, "Ya hay un backup en curso.")
 
     def _refresh_status_labels(self):
         self._last_backup_label.setText(f"Último backup: {format_moment(self._controller.last_backup)}")

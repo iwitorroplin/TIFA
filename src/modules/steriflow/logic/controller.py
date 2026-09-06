@@ -3,24 +3,28 @@ from __future__ import annotations
 import threading
 from datetime import datetime
 
+from src.modules.steriflow.logic.backup import availability
 from src.modules.steriflow.logic.backup.scheduler import Scheduler
 from src.modules.steriflow.logic.backup.service import BackupService
 from src.modules.steriflow.logic.config import SteriflowSettings, ensure_config_file, load_settings
 from src.shared.logs.history import last_backup_time
 from src.shared.logs.logger import Logger
+from src.shared.messages.types import Module
 
 AGENT_LOG_FILENAME = "steriflow_agent.log"
 BACKUP_LOG_PREFIX = "steriflow_backup_"
 
 
 class SteriflowController:
-    """Mantiene viva la configuración de Steriflow y su scheduler, y permite
-    recargarlos desde disco (por ejemplo, tras guardar cambios en la pestaña de
-    configuración) sin tener que reiniciar la app."""
+    """Mantiene viva la configuración de Steriflow y lo que corre en automático
+    —el scheduler de backups y la comprobación periódica de disponibilidad de
+    las autoclaves—, y permite recargarlos desde disco (por ejemplo, tras
+    guardar cambios en la pestaña de configuración) sin reiniciar la app."""
 
     def __init__(self, settings: SteriflowSettings) -> None:
         self._lock = threading.Lock()
         self._scheduler: Scheduler | None = None
+        self._availability: availability.AvailabilityMonitor | None = None
         self._auto_enabled = False
         self._run_now_lock = threading.Lock()
         self._run_now_in_progress = False
@@ -59,42 +63,65 @@ class SteriflowController:
 
     def start(self) -> None:
         with self._lock:
-            self._start_scheduler_locked()
+            self._start_automation_locked()
 
     def reload(self) -> None:
         with self._lock:
             self.settings = load_settings()
             self.backup_service = BackupService(self.settings)
 
-            if self._scheduler is not None:
-                self._scheduler.stop()
+            self._stop_automation_locked()
 
             # Recargar config (p. ej. tras guardar en la pestaña de
             # Configuración) no debe reactivar el modo automático si el
             # usuario lo había parado a mano.
             if self._auto_enabled:
-                self._start_scheduler_locked()
+                self._start_automation_locked()
 
     def stop(self) -> None:
         """Para el modo automático: no cancela un backup manual en curso."""
         with self._lock:
-            if self._scheduler is not None:
-                self._scheduler.stop()
+            self._stop_automation_locked()
             self._auto_enabled = False
 
-    def _start_scheduler_locked(self) -> None:
-        if self._scheduler is not None:
-            self._scheduler.stop()
+    def log_availability(self, reason: str) -> None:
+        """Deja constancia en el log del agente de si las autoclaves responden y
+        de si tienen datos nuevos.
 
-        agent_logger = Logger(self.settings.paths.logs_root / AGENT_LOG_FILENAME)
+        Hace pings y lista carpetas de red, así que tarda: llamarla siempre
+        desde un hilo de trabajo, nunca desde el de la interfaz.
+        """
+        availability.log_availability(self.settings, self._new_agent_logger(), reason)
+
+    def _new_agent_logger(self) -> Logger:
+        return Logger(self.settings.paths.logs_root / AGENT_LOG_FILENAME, Module.STERIFLOW)
+
+    def _start_automation_locked(self) -> None:
+        """Arranca las dos piezas del modo automático: el que hace los backups a
+        sus horas y el que va anotando si las máquinas estaban disponibles entre
+        medias."""
+        self._stop_automation_locked()
+
+        agent_logger = self._new_agent_logger()
         scheduler = Scheduler(
             self.settings.schedule.execution_hours,
             self.backup_service.run,
             agent_logger,
         )
+        monitor = availability.AvailabilityMonitor(self.settings, agent_logger)
+
         self._scheduler = scheduler
+        self._availability = monitor
         self._auto_enabled = True
         threading.Thread(target=scheduler.run, daemon=True).start()
+        threading.Thread(target=monitor.run, daemon=True).start()
+
+    def _stop_automation_locked(self) -> None:
+        if self._scheduler is not None:
+            self._scheduler.stop()
+        if self._availability is not None:
+            self._availability.stop()
+            self._availability = None
 
 
 def build_default_controller() -> SteriflowController:

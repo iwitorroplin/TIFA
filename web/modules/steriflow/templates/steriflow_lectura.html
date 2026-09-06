@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_tab_bar.html" import tab_bar with context %}
+{% block titulo %}TIFA · Steriflow · Lectura{% endblock %}
+
+{% block content %}
+<h1>Steriflow</h1>
+{{ tab_bar([
+  {'label': 'Home', 'url': '/steriflow'},
+  {'label': 'Lectura', 'url': '/steriflow/lectura'},
+  {'label': 'Historial', 'url': '/steriflow/historial'},
+]) }}
+
+<form id="form">
+  <div>
+    <label for="temp_c">Temperatura (°C)</label>
+    <input type="number" id="temp_c" step="0.1" inputmode="decimal" required>
+  </div>
+  <div>
+    <label for="created_by">Quién</label>
+    <input type="text" id="created_by" maxlength="120" autocomplete="off" value="{{ usuario.name }}">
+  </div>
+  <div>
+    <label for="note">Nota</label>
+    <textarea id="note" maxlength="500"></textarea>
+  </div>
+  <button type="submit">Guardar</button>
+</form>
+{% endblock %}
+
+{% block script %}
+<script>
+const form = document.getElementById('form');
+
+form.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const cuerpo = {
+    temp_c: document.getElementById('temp_c').value,
+    created_by: document.getElementById('created_by').value,
+    note: document.getElementById('note').value,
+  };
+  const res = await fetch('/api/steriflow', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+  const datos = await res.json();
+  if (res.ok) {
+    mostrarAviso('success', 'Lectura guardada.');
+    // Se limpian temp_c y note pero se mantiene "created_by": la misma
+    // persona suele mandar varias lecturas seguidas.
+    document.getElementById('temp_c').value = '';
+    document.getElementById('note').value = '';
+  } else {
+    mostrarAviso('error', datos.error || 'No se pudo guardar.');
+  }
+});
+</script>
+{% endblock %}

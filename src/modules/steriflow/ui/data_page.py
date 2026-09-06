@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import datetime as dt
-import html
 
 from PySide6.QtCore import QDate, QTimer, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QTextDocument
-from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
+from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -25,10 +23,14 @@ from PySide6.QtWidgets import (
 
 from src.shared.db.connection import connect
 from src.modules.steriflow.logic.config import load_settings
+from src.modules.steriflow.logic.controller import AGENT_LOG_FILENAME
+from src.shared.logs.logger import Logger
+from src.shared.messages.types import MessageType, Module
 from src.modules.steriflow.logic.sterilization import repo
 from src.modules.steriflow.logic.sterilization import service as sterilization_service
 from src.modules.steriflow.logic.sterilization.models import SterilizationCycle
 from src.shared.ui.components.app_button import AppButton
+from src.shared.ui import printing
 
 _COL_AUTOCLAVE = 0
 _COL_STARTED_AT = 1
@@ -60,6 +62,22 @@ _HEADERS = [
 _REVIEW_BACKGROUND = QColor(255, 244, 200)
 _REVIEW_FOREGROUND = QColor(90, 60, 0)
 
+_PRINT_TITLE = "Ciclos de esterilización — Steriflow"
+_PRINT_PDF_PREFIX = "ciclos_esterilizacion"
+# Los números se leen mejor alineados a la derecha; el resto, a la izquierda.
+_PRINT_ALIGNS = [
+    printing.Align.LEFT,    # Autoclave
+    printing.Align.LEFT,    # Fecha inicio
+    printing.Align.LEFT,    # Producto
+    printing.Align.LEFT,    # Lote
+    printing.Align.RIGHT,   # Nº ciclo
+    printing.Align.RIGHT,   # Duración
+    printing.Align.RIGHT,   # T media
+    printing.Align.RIGHT,   # T mín
+    printing.Align.RIGHT,   # T máx
+    printing.Align.LEFT,    # Revisión
+]
+
 _PAGE_SIZES = [20, 50, 100]
 _DEFAULT_PAGE_SIZE = 50
 # Al escribir en el filtro de producto se espera a que el usuario pare de
@@ -79,48 +97,21 @@ def _format_duration(seconds: int | None) -> str:
 def _format_temp(value: float | None) -> str:
     return "—" if value is None else f"{value:.2f}"
 
-# _build_print_html y _print_row_html generan el HTML que se pasa a QTextDocument para imprimir. 
-# Se hace así en vez de con un QTableWidget porque QTextDocument permite paginar automáticamente, mientras que QTableWidget no.
-# Problema_1: si la tabla es muy larga, el QTableWidget no se puede imprimir en varias páginas. Con QTextDocument sí.
-# Problema_2: la talba se veria mejor en horizontal
-#   añadiremos en la fucnion build la opcion de orientacion.
-# asignar por defecto DIN-A4 
-
-
-
-def _build_print_html(cycles: list[SterilizationCycle]) -> str:
-    filas = "".join(_print_row_html(c) for c in cycles)
-    generado = dt.datetime.now().strftime("%d/%m/%Y %H:%M")
-    return (
-        "<h2>Ciclos de esterilización — Steriflow</h2>"
-        f"<p>Generado: {generado} &middot; {len(cycles)} ciclo(s)</p>"
-        "<table border='1' cellspacing='0' cellpadding='4' width='100%'>"
-        "<tr>"
-        "<th>Autoclave</th><th>Fecha inicio</th><th>Producto</th><th>Lote</th>"
-        "<th>Nº ciclo</th><th>Duración esteril.</th>"
-        "<th>T media (°C)</th><th>T mín (°C)</th><th>T máx (°C)</th><th>Revisión</th>"
-        "</tr>"
-        f"{filas}"
-        "</table>"
-    )
-
-
-def _print_row_html(cycle: SterilizationCycle) -> str:
-    revision = html.escape(cycle.review_notes) if cycle.needs_review else ""
-    return (
-        "<tr>"
-        f"<td>{cycle.autoclave_code}</td>"
-        f"<td>{cycle.started_at.strftime('%d/%m/%Y %H:%M:%S')}</td>"
-        f"<td>{html.escape(cycle.product)}</td>"
-        f"<td>{html.escape(cycle.batch)}</td>"
-        f"<td>{html.escape(cycle.cycle_number)}</td>"
-        f"<td>{_format_duration(cycle.sterilization_duration_s)}</td>"
-        f"<td>{_format_temp(cycle.sterilization_temp_mean_c)}</td>"
-        f"<td>{_format_temp(cycle.sterilization_temp_min_c)}</td>"
-        f"<td>{_format_temp(cycle.sterilization_temp_max_c)}</td>"
-        f"<td>{revision}</td>"
-        "</tr>"
-    )
+# Las mismas columnas que se ven en pantalla, en texto plano: el escapado, el
+# HTML y la paginación son cosa de src.shared.ui.printing.
+def _print_row(cycle: SterilizationCycle) -> list[str]:
+    return [
+        str(cycle.autoclave_code),
+        cycle.started_at.strftime("%d/%m/%Y %H:%M:%S"),
+        cycle.product,
+        cycle.batch,
+        cycle.cycle_number,
+        _format_duration(cycle.sterilization_duration_s),
+        _format_temp(cycle.sterilization_temp_mean_c),
+        _format_temp(cycle.sterilization_temp_min_c),
+        _format_temp(cycle.sterilization_temp_max_c),
+        cycle.review_notes if cycle.needs_review else "",
+    ]
 
 
 class SteriflowDataPage(QWidget):
@@ -212,11 +203,15 @@ class SteriflowDataPage(QWidget):
         print_button = AppButton("Imprimir selección")
         print_button.clicked.connect(self._print_selected)
 
+        export_pdf_button = AppButton("Guardar tabla en PDF")
+        export_pdf_button.clicked.connect(self._export_selected_to_pdf)
+
         row = QWidget()
         row_layout = QHBoxLayout(row)
         row_layout.setContentsMargins(0, 0, 0, 0)
         row_layout.addWidget(open_pdf_button)
         row_layout.addWidget(print_button)
+        row_layout.addWidget(export_pdf_button)
         row_layout.addStretch()
         return row
 
@@ -382,10 +377,40 @@ class SteriflowDataPage(QWidget):
             QMessageBox.information(self, "Imprimir", "Selecciona al menos un ciclo para imprimir.")
             return
 
-        document = QTextDocument()
-        document.setHtml(_build_print_html(cycles))
+        self._print_job(cycles).preview(self)
 
-        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-        dialog = QPrintPreviewDialog(printer, self)
-        dialog.paintRequested.connect(lambda p: document.print_(p))
-        dialog.exec()
+    def _export_selected_to_pdf(self):
+        cycles = self._selected_cycles()
+        if not cycles:
+            QMessageBox.information(self, "Guardar PDF", "Selecciona al menos un ciclo para guardar.")
+            return
+
+        destino = printing.ask_pdf_path(self, f"{_PRINT_PDF_PREFIX}_{dt.datetime.now():%Y%m%d_%H%M}.pdf")
+        if destino is None:
+            return
+
+        # Un PDF exportado es un documento que sale de la aplicación: interesa
+        # que quede en el log cuándo se generó y dónde, no solo avisar en el
+        # momento.
+        logger = Logger(load_settings().paths.logs_root / AGENT_LOG_FILENAME, Module.STERIFLOW)
+        try:
+            self._print_job(cycles).export_pdf(destino)
+        except OSError as ex:
+            logger.log(f"No se pudo guardar el PDF '{destino}': {ex}", talk=MessageType.ERROR)
+            return
+
+        logger.log(
+            f"PDF de {len(cycles)} ciclo(s) guardado en {destino}", talk=MessageType.SUCCESS
+        )
+
+    def _print_job(self, cycles: list[SterilizationCycle]) -> printing.PrintJob:
+        """La tabla de la selección, lista tanto para la impresora como para el PDF."""
+        return printing.table_job(
+            _PRINT_TITLE,
+            _HEADERS,
+            [_print_row(cycle) for cycle in cycles],
+            subtitle=f"{len(cycles)} ciclo(s)",
+            # Los pendientes de revisión salen resaltados en papel igual que en pantalla.
+            highlighted=[cycle.needs_review for cycle in cycles],
+            aligns=_PRINT_ALIGNS,
+        )

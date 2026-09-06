@@ -1,21 +1,21 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from src.shared.messages.types import Delivery, MessageType, Module
+from src.shared.messages.types import MessageType, Module
 
 
 @dataclass(frozen=True)
 class Message:
-    """Mensaje real emitido por un módulo, con quién lo originó y cuándo.
+    """Un aviso puntual para el usuario, en el momento en que ocurre.
 
-    El remitente (personaje) y el color se resuelven aparte a partir de
-    `type`, vía `SENDERS`/`ACCENT_COLORS` en `src.shared.characters.senders`:
-    son fijos por severidad, no por módulo. `delivery` decide si además se
-    anuncia con un personaje o si se queda solo en el historial.
+    No es una entrada de historial: lo que hay que poder consultar después
+    vive en el log del módulo (pestaña Logs del navbar). El remitente
+    (personaje) y el color se resuelven aparte a partir de `type`, vía
+    `SENDERS`/`ACCENT_COLORS` en `src.shared.characters.senders`: son fijos
+    por severidad, no por módulo.
     """
 
     module: Module
     type: MessageType
     text: str
-    delivery: Delivery = Delivery.CHARACTER
     timestamp: datetime = field(default_factory=datetime.now)

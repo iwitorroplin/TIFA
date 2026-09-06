@@ -7,6 +7,7 @@ from datetime import datetime, time, timedelta
 from typing import Callable, Iterable
 
 from src.shared.logs.logger import Logger
+from src.shared.messages.types import MessageType
 
 
 class Scheduler:
@@ -49,4 +50,10 @@ class Scheduler:
             try:
                 self._on_execute()
             except Exception as ex:
-                self._logger.log(f"Error durante la ejecución del backup: {ex}")
+                # Unico sitio del modulo donde algo puede fallar sin nadie
+                # delante: si esto solo se anotara, un backup nocturno roto no
+                # se descubriria hasta que alguien abriese el log.
+                self._logger.log(
+                    f"Error durante la ejecución del backup programado: {ex}",
+                    talk=MessageType.ERROR,
+                )

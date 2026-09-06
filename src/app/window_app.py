@@ -3,6 +3,7 @@ from PySide6.QtWidgets import QHBoxLayout, QMainWindow, QStackedWidget, QWidget
 
 from src.modules.registry import MODULES
 from src.shared.assets.resources import UI_ICON
+from src.shared.characters import conversation
 from src.shared.characters.message_bar import MessageBar
 from src.app.nav_bar import Navbar
 
@@ -30,6 +31,10 @@ class MainWindow(QMainWindow):
         self._navbar.currentChanged.connect(self._pages.setCurrentIndex)
 
         self._message_bar = MessageBar()
+        # Añadido suelto, no parte del sistema de avisos: doble clic en un
+        # retrato y ese personaje arranca una conversación. Se quita
+        # borrando esta línea (ver shared/characters/conversation.py).
+        self._conversations = conversation.attach(self._message_bar)
 
         # Tres columnas: navbar (izquierda) | páginas (centro) | message_bar
         # (derecha), igual de ancho fijo que navbar. Antes MessageBar era un

@@ -20,6 +20,16 @@ def connect(path: Path = DB_PATH) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
+    # WAL y no el journal por defecto: desde que el servidor web (otro proceso,
+    # ver web/) escribe en este mismo fichero, con rollback journal un lector y
+    # un escritor se excluyen y el que pierde se lleva un "database is locked".
+    # En WAL los lectores no bloquean al escritor ni al revés; solo queda
+    # escritor contra escritor, que es lo que absorbe busy_timeout. Es
+    # propiedad del FICHERO, no de la conexión -se fija una vez y queda-, pero
+    # se pide en cada connect() para que no dependa de qué proceso lo abrió
+    # primero.
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("PRAGMA foreign_keys = ON")
     ensure_schema(conn)
     return conn

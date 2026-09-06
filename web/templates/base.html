@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<!-- Quien entra sobre todo lo hace desde el móvil -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block titulo %}TIFA{% endblock %}</title>
+<!--
+  Sin CDN a propósito: esta página vive en una red local que puede no tener
+  salida a internet. Un <script src="https://..."> dejaría la pantalla en
+  blanco justo en el sitio donde tiene que funcionar.
+-->
+<link rel="icon" href="/assets/icons/app.ico">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="app-shell">
+
+  <aside class="navbar">
+    {% if request.state.user %}
+    <!-- "Home" fijo antes del bucle, no un WebModuleSpec más: mismo patrón
+         que "Salir" en src/app/nav_bar.py (un botón añadido aparte del
+         recorrido de módulos, no dentro de él). Mismo color que tiene Home
+         en src/modules/registry.py. -->
+    <a class="nav-link{% if request.url.path == '/' %} active{% endif %}"
+       href="/" style="--nav-color: #3f51b5;">Home</a>
+    <!-- Solo el módulo asignado a este usuario, nunca los otros tres: no es
+         un detalle visual, es la propia regla de acceso hecha navegable -->
+    {% for modulo in web_modules %}
+    {% if modulo.id == request.state.user.module %}
+    <a class="nav-link{% if request.url.path.startswith('/' ~ modulo.id) %} active{% endif %}"
+       href="/{{ modulo.id }}"
+       {% if modulo.color %}style="--nav-color: {{ modulo.color }};"{% endif %}>{{ modulo.label }}</a>
+    {% endif %}
+    {% endfor %}
+    <a class="nav-link" href="/logout" style="--nav-color: #ca4646;">Cerrar sesión</a>
+    {% else %}
+    <span class="navbar-empty">TIFA</span>
+    {% endif %}
+  </aside>
+
+  <div class="content-area">
+
+    <!-- "Qué dice": el texto del último aviso de ESTA página. Empieza
+         oculto; static/portrait.js lo muestra/oculta con mostrarAviso().
+         "Quién lo dice" vive aparte, en .message-bar -siempre visible,
+         no solo cuando hay algo que decir (ver más abajo). -->
+    <div id="aviso-banner" class="aviso-banner" hidden>
+      <div class="aviso-cuerpo">
+        <strong class="aviso-nombre"></strong>
+        <span class="aviso-texto"></span>
+      </div>
+      <button type="button" id="aviso-cerrar" class="aviso-cerrar" aria-label="Cerrar">×</button>
+    </div>
+
+    <main>
+    {% block content %}{% endblock %}
+    </main>
+
+  </div>
+
+  <!-- Equivalente web de MessageBar: los 4 personajes están siempre aquí, en
+       silencio (blanco); static/portrait.js tiñe al que "habla" con su color
+       de acento cuando hay un aviso, igual que en el escritorio. -->
+  <aside class="message-bar">
+    <div class="portrait" data-tipo="success" title="Tifa"></div>
+    <div class="portrait" data-tipo="info" title="Yufi"></div>
+    <div class="portrait" data-tipo="warning" title="Cloud"></div>
+    <div class="portrait" data-tipo="error" title="Sephiroth"></div>
+  </aside>
+
+</div>
+
+<script src="/static/portrait.js"></script>
+{% block script %}{% endblock %}
+
+</body>
+</html>

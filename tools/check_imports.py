@@ -1,7 +1,10 @@
-"""Importa cada módulo bajo src/ y reporta cualquier fallo.
+"""Importa cada módulo bajo src/ y web/ y reporta cualquier fallo.
 
 Guardián de la refactorización: no requiere Qt en pantalla ni base de datos
 real, solo detecta imports rotos, ciclos y rutas de paquete equivocadas.
+Incluye `web/` (el servidor de cara a la LAN) además de `src/` (la app de
+escritorio): son dos árboles de import distintos y cualquiera puede romperse
+sin que el otro se entere.
 
 Uso: python tools/check_imports.py
 """
@@ -17,13 +20,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import src  # noqa: E402
+import web  # noqa: E402
 
 
 def main() -> int:
     failures: list[tuple[str, BaseException]] = []
+    paquetes = [(src.__path__, "src."), (web.__path__, "web.")]
     modules = sorted(
         name
-        for _, name, _ in pkgutil.walk_packages(src.__path__, prefix="src.")
+        for path, prefix in paquetes
+        for _, name, _ in pkgutil.walk_packages(path, prefix=prefix)
     )
     for name in modules:
         try:

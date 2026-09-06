@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% from "_tab_bar.html" import tab_bar with context %}
+{% block titulo %}TIFA · Steriflow · Historial{% endblock %}
+
+{% block content %}
+<h1>Steriflow</h1>
+{{ tab_bar([
+  {'label': 'Home', 'url': '/steriflow'},
+  {'label': 'Lectura', 'url': '/steriflow/lectura'},
+  {'label': 'Historial', 'url': '/steriflow/historial'},
+]) }}
+
+<div class="table-toolbar">
+  <button type="button" id="actualizar">Actualizar</button>
+</div>
+
+<table>
+  <thead>
+    <tr><th>Fecha</th><th>°C</th><th>Quién</th><th>Nota</th></tr>
+  </thead>
+  <tbody id="filas"></tbody>
+</table>
+{% endblock %}
+
+{% block script %}
+<script>
+const filas = document.getElementById('filas');
+
+function formatearFecha(iso) {
+  // slice sobre el ISO en vez de toLocaleString: no depende de la
+  // configuración regional del PC que abra la página.
+  if (!iso) return '';
+  return iso.replace('T', ' ').slice(0, 19);
+}
+
+async function cargar() {
+  const res = await fetch('/api/steriflow?limit=20');
+  const lecturas = await res.json();
+  filas.innerHTML = '';
+  for (const lectura of lecturas) {
+    const fila = document.createElement('tr');
+    for (const valor of [formatearFecha(lectura.created_at), lectura.temp_c, lectura.created_by, lectura.note]) {
+      const celda = document.createElement('td');
+      // textContent, nunca innerHTML: la nota la escribe una persona y puede
+      // llevar "<" o "&" sin querer decir HTML.
+      celda.textContent = valor ?? '';
+      fila.appendChild(celda);
+    }
+    filas.appendChild(fila);
+  }
+}
+
+document.getElementById('actualizar').addEventListener('click', cargar);
+cargar();
+</script>
+{% endblock %}
