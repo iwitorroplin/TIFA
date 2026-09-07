@@ -1,14 +1,15 @@
 """
 Catálogo de avisos de Steriflow: cada función redacta el texto y decide
 la severidad de un evento del módulo, sin decidir por qué canal sale -eso es
-cosa de quien la llama (`src.shared.messages.notice.announce`/`push` para el
-bus, `src.shared.ui.notices.show` para un diálogo síncrono). Así el mismo
-aviso puede acabar en el log y en un diálogo sin escribir el texto dos veces.
+cosa de quien la llama, con `src.shared.messages.notice.announce`/`push`.
 
 Reparto de canal: lo que merece quedar en el log lo anuncia la lógica con
 `announce()`, para que salga igual venga de un botón o del scheduler
-nocturno; lo que es respuesta síncrona a un formulario lo muestra la página
-con `show()`. Quedan fuera de este catálogo, a propósito: las líneas de log
+nocturno; lo que es respuesta directa a un clic, sin nada que registrar,
+lo dice la página con `push()`. Todos los avisos del módulo van por los
+personajes (ver `MessageBar`); no hay un segundo canal de diálogo síncrono
+-lo hubo (`src.shared.ui.notices.show`) hasta que dejó de tener ningún
+llamador-. Quedan fuera de este catálogo, a propósito: las líneas de log
 sin `talk=`, y las etiquetas estáticas de widgets (títulos de QGroupBox,
 botones, cabeceras de tabla).
 """
@@ -146,20 +147,20 @@ _OPEN_FAILURE_TEXTS = {
 
 
 def no_cycles_selected_to_open() -> Notice:
-    return Notice(MessageType.INFO, "Selecciona al menos un ciclo.", title="Abrir PDF")
+    return Notice(MessageType.INFO, "Selecciona al menos un ciclo.")
 
 
 def no_cycles_selected_to_print() -> Notice:
-    return Notice(MessageType.INFO, "Selecciona al menos un ciclo para imprimir.", title="Imprimir")
+    return Notice(MessageType.INFO, "Selecciona al menos un ciclo para imprimir.")
 
 
 def no_cycles_selected_to_export() -> Notice:
-    return Notice(MessageType.INFO, "Selecciona al menos un ciclo para guardar.", title="Guardar PDF")
+    return Notice(MessageType.INFO, "Selecciona al menos un ciclo para guardar.")
 
 
 def pdfs_not_opened(failures: Sequence[tuple[str, OpenFailure]]) -> Notice:
     lines = [f"{filename}: {_OPEN_FAILURE_TEXTS[reason]}" for filename, reason in failures]
-    return Notice(MessageType.WARNING, "No se pudieron abrir:\n" + "\n".join(lines), title="Abrir PDF")
+    return Notice(MessageType.WARNING, "No se pudieron abrir:\n" + "\n".join(lines))
 
 
 def cycles_pdf_saved(count: int, destination: Path) -> Notice:

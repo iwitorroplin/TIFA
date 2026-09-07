@@ -23,8 +23,8 @@ from PySide6.QtWidgets import (
 from src.modules.steriflow.logic.logs import agent_logger
 from src.modules.steriflow.messages import catalog
 from src.modules.steriflow.messages.catalog import OpenFailure
-from src.shared.messages.notice import announce
-from src.shared.ui import notices
+from src.shared.messages.notice import announce, push
+from src.shared.messages.types import Module
 from src.modules.steriflow.ui.data_presenter import DEFAULT_PAGE_SIZE, SteriflowDataPresenter
 from src.shared.ui.components.app_button import AppButton
 from src.shared.ui import printing
@@ -282,7 +282,7 @@ class SteriflowDataPage(QWidget):
     def _open_selected_pdfs(self):
         cycles = self._selected_cycles()
         if not cycles:
-            notices.show(self, catalog.no_cycles_selected_to_open())
+            push(Module.STERIFLOW, catalog.no_cycles_selected_to_open())
             return
         self._open_pdfs(cycles)
 
@@ -296,12 +296,12 @@ class SteriflowDataPage(QWidget):
                 fallos.append((cycle.source_filename, OpenFailure.CANNOT_OPEN))
 
         if fallos:
-            notices.show(self, catalog.pdfs_not_opened(fallos))
+            push(Module.STERIFLOW, catalog.pdfs_not_opened(fallos))
 
     def _print_selected(self):
         cycles = self._selected_cycles()
         if not cycles:
-            notices.show(self, catalog.no_cycles_selected_to_print())
+            push(Module.STERIFLOW, catalog.no_cycles_selected_to_print())
             return
 
         self._print_job(cycles).preview(self)
@@ -309,7 +309,7 @@ class SteriflowDataPage(QWidget):
     def _export_selected_to_pdf(self):
         cycles = self._selected_cycles()
         if not cycles:
-            notices.show(self, catalog.no_cycles_selected_to_export())
+            push(Module.STERIFLOW, catalog.no_cycles_selected_to_export())
             return
 
         destino = printing.ask_pdf_path(self, f"{_PRINT_PDF_PREFIX}_{dt.datetime.now():%Y%m%d_%H%M}.pdf")

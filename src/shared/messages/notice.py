@@ -20,8 +20,6 @@ class Notice:
 
     type: MessageType
     text: str
-    # Solo lo usa el sumidero de diálogo (`src.shared.ui.notices.show`).
-    title: str = ""
 
 
 def announce(logger: Logger, notice: Notice) -> None:
