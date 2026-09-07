@@ -20,16 +20,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.shared.db.connection import connect
 from src.modules.steriflow.logic.config import load_settings
 from src.modules.steriflow.logic.logs import agent_logger
 from src.modules.steriflow.messages import catalog
 from src.modules.steriflow.messages.catalog import OpenFailure
 from src.shared.messages.notice import announce
 from src.shared.ui import notices
-from src.modules.steriflow.logic.sterilization import repo
 from src.modules.steriflow.logic.sterilization import service as sterilization_service
 from src.modules.steriflow.logic.sterilization.models import SterilizationCycle
+from src.modules.steriflow.logic.sterilization.queries import CycleFilters, cycle_page
 from src.shared.ui.components.app_button import AppButton
 from src.shared.ui import printing
 
@@ -276,27 +275,22 @@ class SteriflowDataPage(QWidget):
             self._current_page += 1
             self._reload_cycles()
 
-    def _current_filters(self):
-        return {
-            "product_query": self._product_filter_edit.text().strip() or None,
-            "date_from": self._date_from_edit.date().toPython() if self._date_from_checkbox.isChecked() else None,
-            "date_to": self._date_to_edit.date().toPython() if self._date_to_checkbox.isChecked() else None,
-            "needs_review": True if self._needs_review_checkbox.isChecked() else None,
-        }
+    def _current_filters(self) -> CycleFilters:
+        return CycleFilters(
+            product_query=self._product_filter_edit.text().strip() or None,
+            date_from=self._date_from_edit.date().toPython() if self._date_from_checkbox.isChecked() else None,
+            date_to=self._date_to_edit.date().toPython() if self._date_to_checkbox.isChecked() else None,
+            needs_review=True if self._needs_review_checkbox.isChecked() else None,
+        )
 
     def _reload_cycles(self):
-        filters = self._current_filters()
-
-        conn = connect()
-        try:
-            self._total_count = repo.count_cycles(conn, **filters)
-            cycles = repo.list_cycles(
-                conn, **filters,
-                limit=self._page_size,
-                offset=self._current_page * self._page_size,
-            )
-        finally:
-            conn.close()
+        page = cycle_page(
+            self._current_filters(),
+            page_index=self._current_page,
+            page_size=self._page_size,
+        )
+        self._total_count = page.total
+        cycles = page.cycles
 
         self._row_cycles = cycles
 
