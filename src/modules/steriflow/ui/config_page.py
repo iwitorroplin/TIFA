@@ -1,5 +1,4 @@
 from datetime import time
-from pathlib import Path
 
 from PySide6.QtCore import QTime, QTimer, Qt
 from PySide6.QtGui import QIcon
@@ -22,16 +21,16 @@ from PySide6.QtWidgets import (
 )
 
 from src.modules.steriflow.logic.controller import SteriflowController
-from src.modules.steriflow.logic.config import (
-    AutoclaveConfig,
-    ScheduleConfig,
-    SteriflowPaths,
-    SteriflowSettings,
-    save_settings,
-)
+from src.modules.steriflow.logic.config import AutoclaveConfig, SteriflowSettings
 from src.modules.steriflow.logic.logs import agent_logger
 from src.modules.steriflow.logic.network import MachineStatus
-from src.modules.steriflow.logic.settings_editor import AutoclaveIssue, SettingsIssue
+from src.modules.steriflow.logic.settings_editor import (
+    SaveStatus,
+    SettingsDraft,
+    SettingsIssue,
+    apply as apply_settings,
+    validate_autoclave,
+)
 from src.modules.steriflow.messages import catalog
 from src.shared.assets.resources import MATERIA_GREEN_IMAGE, MATERIA_RED_IMAGE, MATERIA_YELLOW_IMAGE
 from src.shared.messages.notice import announce
@@ -392,16 +391,6 @@ class SteriflowConfigPage(QWidget):
         """Guarda de inmediato el estado actual de la página: cada acción puntual
         (elegir una carpeta, aceptar el diálogo de autoclave/horario, quitar una
         fila) ya deja la configuración guardada — no hay un botón "Guardar" aparte."""
-        local_root_text = self._local_root_edit.text().strip()
-        if not local_root_text:
-            notices.show(self, catalog.settings_issue(SettingsIssue.LOCAL_ROOT_REQUIRED))
-            return
-
-        server_root_text = self._server_root_edit.text().strip()
-        if not server_root_text:
-            notices.show(self, catalog.settings_issue(SettingsIssue.SERVER_ROOT_REQUIRED))
-            return
-
         autoclaves = [
             AutoclaveConfig(
                 name=self._autoclaves_table.item(row, _COL_NAME).text(),
@@ -413,36 +402,30 @@ class SteriflowConfigPage(QWidget):
             )
             for row in range(self._autoclaves_table.rowCount())
         ]
-
         execution_hours = [
             time.fromisoformat(self._schedules_table.item(row, 0).text())
             for row in range(self._schedules_table.rowCount())
         ]
 
-        if not execution_hours:
-            notices.show(self, catalog.settings_issue(SettingsIssue.AT_LEAST_ONE_SCHEDULE))
-            return
-
-        settings = SteriflowSettings(
-            paths=SteriflowPaths(
-                local_root=Path(local_root_text),
-                server_root=Path(server_root_text),
-            ),
+        draft = SettingsDraft(
+            local_root_text=self._local_root_edit.text().strip(),
+            server_root_text=self._server_root_edit.text().strip(),
             autoclaves=autoclaves,
-            schedule=ScheduleConfig(execution_hours=execution_hours),
-            # Esta página no edita el modo automático (eso es cosa del
-            # checkbox de la home page): se conserva tal cual estaba.
-            auto_enabled=self._controller.settings.auto_enabled,
+            execution_hours=execution_hours,
         )
 
-        # `editingFinished` salta cada vez que un campo pierde el foco, haya
-        # cambiado o no: sin esta comparación, pasear por la página guardaba,
-        # reiniciaba el scheduler y sacaba un "guardada" cada dos clics.
-        if settings == self._controller.settings:
+        # apply() valida, compara con lo ya guardado (dirty-check: sin él,
+        # pasear por la página guardaría, reiniciaría el scheduler y sacaría
+        # un "guardada" cada dos clics con `editingFinished`) y persiste si
+        # hace falta.
+        outcome = apply_settings(self._controller, draft)
+
+        if outcome.status is SaveStatus.INVALID:
+            notices.show(self, catalog.settings_issue(outcome.issue))
+            return
+        if outcome.status is SaveStatus.UNCHANGED:
             return
 
-        save_settings(settings)
-        self._controller.reload()
         self._load_from_settings(self._controller.settings)
 
         # Esta página no tiene botón "Guardar" -se persiste sola-, así que sin
@@ -527,14 +510,18 @@ class _AutoclaveDialog(QDialog):
             line_edit.setText(path)
 
     def accept(self):
-        if not self._path_folder_edit.text().strip():
-            notices.show(self, catalog.autoclave_issue(AutoclaveIssue.SOURCE_FOLDER_REQUIRED))
-            return
-        if not self._local_folder_edit.text().strip():
-            notices.show(self, catalog.autoclave_issue(AutoclaveIssue.LOCAL_FOLDER_REQUIRED))
-            return
-        if not self._backup_folder_edit.text().strip():
-            notices.show(self, catalog.autoclave_issue(AutoclaveIssue.BACKUP_FOLDER_REQUIRED))
+        name, ip, path_folder, local_folder, backup_folder, active = self.values()
+        autoclave = AutoclaveConfig(
+            name=name,
+            ip=ip,
+            path_folder=path_folder,
+            local_folder=local_folder,
+            backup_folder=backup_folder,
+            active=active,
+        )
+        issue = validate_autoclave(autoclave)
+        if issue is not None:
+            notices.show(self, catalog.autoclave_issue(issue))
             return
         super().accept()
 
