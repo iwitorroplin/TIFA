@@ -101,15 +101,6 @@ class SteriflowController:
         self.settings = dataclasses.replace(self.settings, auto_enabled=enabled)
         save_settings(self.settings)
 
-    def log_availability(self, reason: str) -> None:
-        """Deja constancia en el log del agente de si las autoclaves responden y
-        de si tienen datos nuevos.
-
-        Hace pings y lista carpetas de red, así que tarda: llamarla siempre
-        desde un hilo de trabajo, nunca desde el de la interfaz.
-        """
-        availability.log_availability(self.settings, agent_logger(), reason)
-
     def _start_automation_locked(self) -> None:
         """Arranca las dos piezas del modo automático: el que hace los backups a
         sus horas y el que va anotando si las máquinas estaban disponibles entre

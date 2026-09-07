@@ -47,7 +47,3 @@ def check_machine_status(ip_address: str) -> MachineStatus:
     if "INACCESIBLE" in output or "UNREACHABLE" in output:
         return MachineStatus.OFFLINE
     return MachineStatus.CONNECTION_ERROR
-
-
-def is_reachable(ip_address: str) -> bool:
-    return check_machine_status(ip_address) == MachineStatus.ONLINE

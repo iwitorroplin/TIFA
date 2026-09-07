@@ -55,26 +55,14 @@ class BackupRunner(QObject):
         return True
 
     def _worker(self, logger: Logger, action: Callable[[], None]) -> None:
-        self._log_availability(logger)
         try:
             # El "terminado" lo dice la propia acción (ver BackupService), que
-            # es la que sabe qué mitad del pipeline acaba de correr.
+            # es la que sabe qué mitad del pipeline acaba de correr -y es
+            # también quien comprueba la disponibilidad de las autoclaves
+            # antes de arrancar, ya no este runner.
             action()
         except Exception as ex:
             announce(logger, catalog.manual_backup_failed(ex))
         finally:
             self._controller.finish_run_now()
             self.finished.emit()
-
-    def _log_availability(self, logger: Logger) -> None:
-        """Anota cómo estaban las máquinas al lanzar el backup: si luego no se
-        copia nada, en el log queda si fue porque alguna no respondía o porque
-        no había datos nuevos.
-
-        Comprobar es solo para tener constancia, así que si la comprobación
-        falla se deja dicho y el backup sigue igual.
-        """
-        try:
-            self._controller.log_availability("backup manual")
-        except Exception as ex:
-            logger.log(f"No se pudo comprobar la disponibilidad de las autoclaves: {ex}")

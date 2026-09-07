@@ -61,7 +61,7 @@ class AutoclaveConfig:
     #
     # path_folder: carpeta compartida (UNC) de la propia autoclave, de la que
     # se traen sus PDF. Recurso de red: si la máquina está apagada, no hay
-    # señal y esta ruta no es alcanzable (ver src.modules.steriflow.logic.network.is_reachable).
+    # señal y esta ruta no es alcanzable (ver src.modules.steriflow.logic.network.check_machine_status).
     path_folder: str
     # local_folder: carpeta local de staging de esta autoclave en el PC donde
     # corre TIFA (destino del PASO 3, origen del PASO 5).

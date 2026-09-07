@@ -33,11 +33,18 @@ def full_backup_finished(incidents: int) -> Notice:
 
 
 def fetch_finished(incidents: int) -> Notice:
-    return _finished("Traída desde las máquinas finalizada", incidents)
+    return _finished("Importación de las máquinas realizada", incidents)
+
+
+def fetch_no_machines_reachable() -> Notice:
+    """Sin incidencias pero sin ninguna autoclave disponible: no queda nada
+    que consultar en el log, así que no puede salir como SUCCESS -no se ha
+    traído nada- (ver `BackupService.fetch`)."""
+    return Notice(MessageType.WARNING, "Importación de las máquinas no realizada: ninguna autoclave respondió")
 
 
 def server_backup_finished(incidents: int) -> Notice:
-    return _finished("Backup a servidor finalizado", incidents)
+    return _finished("Exportación al servidor realizada", incidents)
 
 
 def _finished(done_message: str, incidents: int) -> Notice:

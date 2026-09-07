@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.shared.db.connection import connect
+from src.modules.steriflow.logic.backup import availability
+from src.modules.steriflow.logic.backup.availability import AutoclaveAvailability
 from src.modules.steriflow.logic.backup.reports import new_reports
 from src.modules.steriflow.logic.backup.robocopy import run_robocopy
 from src.modules.steriflow.logic.config import AutoclaveConfig, SteriflowSettings
@@ -10,7 +12,6 @@ from src.modules.steriflow.logic.logs import new_backup_logger
 from src.modules.steriflow.messages import catalog
 from src.shared.logs.logger import Logger
 from src.shared.messages.notice import announce
-from src.modules.steriflow.logic.network import is_reachable
 from src.modules.steriflow.logic.sterilization import service as sterilization_service
 
 # robocopy: 0-7 es exito (incluye "sin cambios"), 8+ es fallo. Ver robocopy /?.
@@ -44,27 +45,49 @@ class BackupService:
     def run(self) -> None:
         logger = self._new_logger()
         logger.log("PASO 0: Prepara la carpeta de logs y el archivo de log de esta ejecución")
-        incidencias = self._fetch_all(logger) + self._backup_all(logger)
+        disponibilidad = self._check_availability(logger, "backup automático")
+        incidencias = self._fetch_all(logger, disponibilidad) + self._backup_all(logger)
         announce(logger, catalog.full_backup_finished(incidencias))
 
     def fetch(self) -> None:
         """Acción manual: solo trae los PDF nuevos de las autoclaves a su carpeta local."""
         logger = self._new_logger()
         logger.log("PASO 0: Prepara la carpeta de logs y el archivo de log de esta ejecución")
-        incidencias = self._fetch_all(logger)
-        announce(logger, catalog.fetch_finished(incidencias))
+        disponibilidad = self._check_availability(logger, "importación manual")
+        incidencias = self._fetch_all(logger, disponibilidad)
+
+        # Sin incidencias pero sin ninguna autoclave disponible no es un
+        # SUCCESS silencioso: no se ha traído nada y conviene que se note,
+        # en vez de que quede escondido dentro de un "finalizado" en verde.
+        if incidencias == 0 and not any(a.is_available for a in disponibilidad.values()):
+            announce(logger, catalog.fetch_no_machines_reachable())
+        else:
+            announce(logger, catalog.fetch_finished(incidencias))
 
     def backup(self) -> None:
         """Acción manual: solo replica lo que ya hay en local hacia el servidor de cada autoclave."""
         logger = self._new_logger()
         logger.log("PASO 0: Prepara la carpeta de logs y el archivo de log de esta ejecución")
+        # Solo para que quede constancia en el log de cómo estaban las
+        # máquinas al lanzar la acción: replicar a servidor no depende de
+        # ellas (va de local a servidor), así que el resultado no se usa.
+        self._check_availability(logger, "exportación manual")
         incidencias = self._backup_all(logger)
         announce(logger, catalog.server_backup_finished(incidencias))
 
     def _new_logger(self) -> Logger:
         return new_backup_logger()
 
-    def _fetch_all(self, logger: Logger) -> int:
+    def _check_availability(self, logger: Logger, reason: str) -> dict[str, AutoclaveAvailability]:
+        """Comprueba una vez si las autoclaves responden y qué tienen
+        pendiente, y lo deja en el log. El resultado lo reutiliza
+        `_fetch_autoclave` -antes se comprobaba aquí para el log y otra vez,
+        por su cuenta, dentro de cada `_fetch_autoclave`: el doble ping podía
+        tardar el doble sin motivo."""
+        resultados = availability.log_availability(self._settings, logger, reason)
+        return {resultado.name: resultado for resultado in resultados}
+
+    def _fetch_all(self, logger: Logger, disponibilidad: dict[str, AutoclaveAvailability]) -> int:
         """Devuelve cuántas autoclaves fallaron: la cuenta que decide si el
         aviso final es SUCCESS o WARNING (ver la clase `BackupService`)."""
         incidencias = 0
@@ -73,7 +96,7 @@ class BackupService:
                 logger.log(f"[{autoclave.name}] Inactiva, se omite")
                 continue
             try:
-                incidencias += self._fetch_autoclave(autoclave, logger)
+                incidencias += self._fetch_autoclave(autoclave, logger, disponibilidad.get(autoclave.name))
             except Exception as ex:
                 logger.log(f"[{autoclave.name}] ERROR trayendo PDF de la autoclave: {ex}")
                 incidencias += 1
@@ -101,33 +124,46 @@ class BackupService:
             conn.close()
         return incidencias
 
-    def _fetch_autoclave(self, autoclave: AutoclaveConfig, logger: Logger) -> int:
+    def _fetch_autoclave(
+        self, autoclave: AutoclaveConfig, logger: Logger, disponibilidad: AutoclaveAvailability | None
+    ) -> int:
         local_path = Path(autoclave.local_folder)
 
         logger.log(f"[{autoclave.name}] PASO 1: asegura la carpeta local de staging")
         local_path.mkdir(parents=True, exist_ok=True)
 
-        logger.log(f"[{autoclave.name}] Comprobando conexión con {autoclave.ip}...")
         if not autoclave.path_folder.strip():
             logger.log(f"[{autoclave.name}] Sin carpeta de origen configurada, se omite la copia desde la autoclave")
-        elif is_reachable(autoclave.ip):
-            logger.log(
-                f"[{autoclave.name}] PASO 3: trae los PDF desde {autoclave.path_folder} "
-                f"a la carpeta local de staging"
-            )
-            # Destino como string crudo, no str(local_path): igual que con
-            # path_folder, Path le añadiría una barra final a un recurso pelado.
-            # robocopy no lanza excepción: devuelve código, y un 8+ es un fallo
-            # que hasta ahora solo se veía leyendo el log a mano.
-            codigo = run_robocopy(autoclave.path_folder, autoclave.local_folder, "*.pdf", logger)
-            return 1 if codigo >= _ROBOCOPY_FAILURE_CODE else 0
-        else:
-            logger.log(
-                f"[{autoclave.name}] Sin conexión con {autoclave.ip}, se omite la copia "
-                f"desde {autoclave.path_folder}"
-            )
+            return 0
 
-        return 0
+        # 1er check: si no responde -ya comprobado una vez para todas al
+        # lanzar la acción, ver _check_availability- no tiene sentido
+        # intentar la copia. No se vuelve a pingear aquí.
+        if disponibilidad is None or not disponibilidad.is_available:
+            logger.log(
+                f"[{autoclave.name}] Sin conexión con {autoclave.ip} (comprobado al lanzar la acción), "
+                f"se omite la copia desde {autoclave.path_folder}"
+            )
+            return 0
+
+        # 2º check: si ya está todo traído, invocar robocopy solo para que
+        # copie cero ficheros es ruido. `pending_fetch` puede ser None (no se
+        # pudo comprobar la carpeta): en ese caso se sigue e intenta, no se
+        # asume que no hay nada.
+        if disponibilidad.pending_fetch == 0:
+            logger.log(f"[{autoclave.name}] Sin informes nuevos en la autoclave, se omite la copia")
+            return 0
+
+        logger.log(
+            f"[{autoclave.name}] PASO 3: trae los PDF desde {autoclave.path_folder} "
+            f"a la carpeta local de staging"
+        )
+        # Destino como string crudo, no str(local_path): igual que con
+        # path_folder, Path le añadiría una barra final a un recurso pelado.
+        # robocopy no lanza excepción: devuelve código, y un 8+ es un fallo
+        # que hasta ahora solo se veía leyendo el log a mano.
+        codigo = run_robocopy(autoclave.path_folder, autoclave.local_folder, "*.pdf", logger)
+        return 1 if codigo >= _ROBOCOPY_FAILURE_CODE else 0
 
     def _backup_autoclave(self, autoclave: AutoclaveConfig, logger: Logger, conn) -> int:
         local_path = Path(autoclave.local_folder)
