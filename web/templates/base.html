@@ -42,18 +42,6 @@
 
   <div class="content-area">
 
-    <!-- "Qué dice": el texto del último aviso de ESTA página. Empieza
-         oculto; static/portrait.js lo muestra/oculta con mostrarAviso().
-         "Quién lo dice" vive aparte, en .message-bar -siempre visible,
-         no solo cuando hay algo que decir (ver más abajo). -->
-    <div id="aviso-banner" class="aviso-banner" hidden>
-      <div class="aviso-cuerpo">
-        <strong class="aviso-nombre"></strong>
-        <span class="aviso-texto"></span>
-      </div>
-      <button type="button" id="aviso-cerrar" class="aviso-cerrar" aria-label="Cerrar">×</button>
-    </div>
-
     <main>
     {% block content %}{% endblock %}
     </main>
@@ -61,8 +49,12 @@
   </div>
 
   <!-- Equivalente web de MessageBar: los 4 personajes están siempre aquí, en
-       silencio (blanco); static/portrait.js tiñe al que "habla" con su color
-       de acento cuando hay un aviso, igual que en el escritorio. -->
+       silencio (blanco); static/components/message-bar.js tiñe al que
+       "habla" con su color de acento cuando hay un aviso, igual que en el
+       escritorio. "Qué dice" ese personaje ya no vive aquí al lado: es un
+       elemento flotante aparte (ver static/components/message-box.js) que
+       se crea por JS y flota sobre toda la página, no un banner fijo dentro
+       de .content-area que empuje el contenido. -->
   <aside class="message-bar">
     <div class="portrait" data-tipo="success" title="Tifa"></div>
     <div class="portrait" data-tipo="info" title="Yufi"></div>
@@ -72,7 +64,13 @@
 
 </div>
 
-<script src="/static/portrait.js"></script>
+<!-- message-box.js antes que message-bar.js: este último llama a
+     mostrarMessageBox() en cuanto hay un aviso, así que el elemento
+     reutilizable tiene que existir primero. Scripts clásicos a propósito,
+     sin type="module": mismo espíritu que "sin CDN" arriba, sin mecanismos
+     de más en una página que puede vivir sin salida a internet. -->
+<script src="/static/components/message-box.js"></script>
+<script src="/static/components/message-bar.js"></script>
 {% block script %}{% endblock %}
 
 </body>

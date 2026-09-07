@@ -7,6 +7,8 @@ estado de un arranque anterior dentro del mismo proceso.
 
 from __future__ import annotations
 
+from typing import Sequence
+
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -89,7 +91,7 @@ def create_app() -> FastAPI:
     return app
 
 
-def _mensaje_de_error(errores: list[dict]) -> str:
+def _mensaje_de_error(errores: Sequence[dict]) -> str:
     """Un mensaje en castellano a partir del primer fallo de validación de
     Pydantic, en vez de su `msg` en inglés -es lo único de la respuesta que
     la página le enseña a quien está rellenando el formulario."""

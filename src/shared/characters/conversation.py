@@ -1,15 +1,10 @@
-"""Conversaciones entre personajes: el guiño, no el sistema de avisos.
+"""
+Conversaciones entre personajes:
 
-Doble clic en un retrato de `MessageBar` y ese personaje arranca una charla;
-cada OK pasa el turno al siguiente. No es un `Message` ni pasa por `manager`:
-no es información que le haga falta a nadie, no deja rastro en el log y no
-tiene severidad -Tifa aquí no anuncia un éxito, solo habla-.
+Doble clic en un retrato de `MessageBar`
+ese personaje arranca una charla;
+cada OK pasa el turno al siguiente. 
 
-Lo que sí reusa es toda la estructura de `shared/characters`: el mismo
-`MessageBox`, los mismos retratos y colores de `senders.py`, y el mismo índice
-por `MessageType`. Por eso el guion se escribe con los nombres de los
-personajes (`TIFA`, `CLOUD`...), que son alias de esa misma clave: dentro es el
-sistema de siempre, fuera se lee como un diálogo.
 
 Para añadir o cambiar una conversación solo hay que tocar `CONVERSATIONS`, aquí
 abajo. Nada más de la aplicación depende de este fichero: se engancha en
@@ -18,6 +13,7 @@ abajo. Nada más de la aplicación depende de este fichero: se engancha en
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 
 from PySide6.QtCore import QEvent, QObject, Qt
@@ -34,6 +30,15 @@ TIFA = MessageType.SUCCESS
 CLOUD = MessageType.WARNING
 SEPHIROTH = MessageType.ERROR
 
+# Para volver del prefijo de una clave de `CONVERSATIONS` (p.ej. "TIFA") al
+# personaje que le corresponde.
+_CHARACTERS_BY_NAME: dict[str, MessageType] = {
+    "YUFI": YUFI,
+    "TIFA": TIFA,
+    "CLOUD": CLOUD,
+    "SEPHIROTH": SEPHIROTH,
+}
+
 
 @dataclass(frozen=True)
 class Line:
@@ -48,31 +53,182 @@ def script(*lines: tuple[MessageType, str]) -> tuple[Line, ...]:
     return tuple(Line(speaker, text) for speaker, text in lines)
 
 
-# Qué conversación arranca cada retrato. Un retrato sin entrada aquí
-# simplemente no hace nada al doble clic.
-CONVERSATIONS: dict[MessageType, tuple[Line, ...]] = {
-    TIFA: script(
-        (TIFA, "Ya está todo copiado. ¿Ves? No era tan difícil."),
-        (CLOUD, "Lo difícil no es copiar. Es acordarse de mirar si salió bien."),
-        (TIFA, "Para eso está la pestaña de Logs. Ahí queda todo, aunque nadie mire."),
+# Qué conversaciones puede arrancar cada retrato. Cada guion se nombra
+# "PERSONAJE_NN" (NN entre "00" y "99"): el prefijo dice de quién es y el
+# número solo distingue variantes entre sí, sin que importe el orden. Un
+# personaje puede tener varias -o ninguna, y entonces el doble clic no hace
+# nada-; si tiene más de una, cuál se cuenta es un sorteo en cada doble clic,
+# porque la charla es anecdótica y no una secuencia que haya que agotar.
+
+
+
+
+CONVERSATIONS: dict[str, tuple[Line, ...]] = {
+    "TIFA_00": script(
+        (TIFA, "Cloud, ¿has visto mis guantes?"),
+        (CLOUD, "No."),
+        (TIFA, "Están encima de tu espada."),
+        (CLOUD, "...Ah."),
     ),
-    YUFI: script(
-        (YUFI, "¡Eh, eh! ¿Has visto cuántos informes he traído hoy de las autoclaves?"),
-        (SEPHIROTH, "Ninguno. Estaban apagadas."),
-        (YUFI, "...Vale. Pero los habría traído."),
+
+    "TIFA_01": script(
+        (TIFA, "¿Has terminado el informe?"),
+        (CLOUD, "Sí."),
+        (TIFA, "¿Y lo has revisado?"),
+        (CLOUD, "...No."),
+        (CLOUD, "Lo revisaré."),
     ),
-    CLOUD: script(
-        (CLOUD, "Una de las autoclaves no respondía esta mañana."),
-        (TIFA, "¿Y el backup?"),
-        (CLOUD, "Siguió con las demás. Una máquina apagada no puede parar a las otras."),
-        (TIFA, "Por eso el aviso salió amarillo y no rojo."),
+
+    "TIFA_02": script(
+        (TIFA, "¿Sabes qué necesita esta aplicación?"),
+        (CLOUD, "¿Qué?"),
+        (TIFA, "Una barra para medir cuánto café queda en la máquina."),
+        (CLOUD, "Eso no es una métrica."),
+        (TIFA, "Lo será."),
     ),
-    SEPHIROTH: script(
-        (SEPHIROTH, "¿Sabes qué le pasa a un error que nadie lee?"),
-        (YUFI, "¿...Que se queda en el log?"),
-        (SEPHIROTH, "Que vuelve."),
+
+    "YUFI_00": script(
+        (YUFI, "¡He encontrado algo increíble!"),
+        (CLOUD, "¿Qué has encontrado?"),
+        (YUFI, "Una cosa que no estaba buscando."),
+        (CLOUD, "Eso no responde a mi pregunta."),
+        (YUFI, "¡Pero ahora es mía!"),
+    ),
+
+    "YUFI_01": script(
+        (YUFI, "¿Quién ha dejado esto aquí?"),
+        (TIFA, "Probablemente tú."),
+        (YUFI, "Imposible."),
+        (TIFA, "Tiene tu nombre."),
+        (YUFI, "...Eso tampoco demuestra nada."),
+    ),
+
+    "YUFI_02": script(
+        (YUFI, "Cloud, préstame tu espada."),
+        (CLOUD, "No."),
+        (YUFI, "Solo un momento."),
+        (CLOUD, "No."),
+        (YUFI, "Qué poco colaborador."),
+    ),
+
+    "CLOUD_00": script(
+        (CLOUD, "Se terminado el ciclo de esterilización."),
+        (TIFA, "¿Todo correcto?"),
+        (CLOUD, ".... Sí."),
+        (TIFA, "¿Seguro?"),
+        (CLOUD, "...Casi."),
+        (TIFA, "Eso no inspira mucha confianza."),
+    ),
+
+    "CLOUD_01": script(
+        (CLOUD, "¿Has visto a Yufi?"),
+        (TIFA, "Hace cinco minutos."),
+        (CLOUD, "¿Y ahora?"),
+        (TIFA, "Probablemente buscando algo que llevarse."),
+        (CLOUD, "Entonces sabemos dónde está."),
+    ),
+
+    "CLOUD_02": script(
+        (CLOUD, "Todo está en orden."),
+        (SEPHIROTH, "No."),
+        (CLOUD, "¿Qué no está en orden?"),
+        (SEPHIROTH, "La interfaz."),
+        (CLOUD, "..."),
+        (SEPHIROTH, "Demasiado azul."),
+    ),
+
+    "SEPHIROTH_00": script(
+        (SEPHIROTH, "¿Sabes qué es inevitable?"),
+        (YUFI, "¿El tiempo?"),
+        (SEPHIROTH, "Los errores sin leer."),
+        (YUFI, "...Eso es bastante menos dramático."),
+    ),
+
+    "SEPHIROTH_01": script(
+        (SEPHIROTH, "He observado el sistema."),
+        (CLOUD, "¿Y?"),
+        (SEPHIROTH, "Funciona."),
+        (CLOUD, "¿Eso es todo?"),
+        (SEPHIROTH, "Me decepciona admitirlo."),
+    ),
+
+    "SEPHIROTH_02": script(
+        (SEPHIROTH, "Cloud."),
+        (CLOUD, "¿Qué?"),
+        (SEPHIROTH, "Tu informe tiene una errata."),
+        (CLOUD, "¿Dónde?"),
+        (SEPHIROTH, "Página tres."),
+        (CLOUD, "..."),
+        (SEPHIROTH, "Ahora sí tienes un enemigo."),
+    ),
+
+    "TIFA_03": script(
+        (TIFA, "¿Crees que necesitamos otro botón?"),
+        (CLOUD, "No."),
+        (TIFA, "¿Y otro menú?"),
+        (CLOUD, "No."),
+        (TIFA, "¿Otra ventana?"),
+        (CLOUD, "..."),
+        (TIFA, "Vale, vale."),
+    ),
+
+    "YUFI_03": script(
+        (YUFI, "¡He conseguido una cosa!"),
+        (TIFA, "¿Dónde la has encontrado?"),
+        (YUFI, "Eso es confidencial."),
+        (TIFA, "¿La has robado?"),
+        (YUFI, "Prefiero decir: Adquisición temporal de forma indefinida."),
+    ),
+
+    "YUFI_04": script(
+        (YUFI, "¿Qué hace este botón?"),
+        (TIFA, "No lo pulses."),
+        (YUFI, "¿Por qué?"),
+        (TIFA, "Porque no sabemos qué hace."),
+        (YUFI, "Entonces hay que pulsarlo."),
+        (CLOUD, "No."),
+    ),
+
+    "CLOUD_03": script(
+        (CLOUD, "¿Por qué todos me llaman para solucionar cosas?"),
+        (TIFA, "Porque normalmente las solucionas."),
+        (CLOUD, "Ese es el problema."),
+        (TIFA, "¿Que las solucionas?"),
+        (CLOUD, "Que ahora esperan que lo haga siempre."),
+    ),
+
+    "SEPHIROTH_03": script(
+        (SEPHIROTH, "Este sistema tiene una debilidad."),
+        (TIFA, "¿Cuál?"),
+        (SEPHIROTH, "El usuario."),
+        (TIFA, "Eso no es una debilidad del sistema."),
+        (SEPHIROTH, "Depende del usuario."),
+    ),
+    "SEPHIROTH_04": script(
+        (SEPHIROTH, "Cloud."),
+        (CLOUD, "Sephiroth."),
+        (SEPHIROTH, "Nada."),
+        (CLOUD, "..."),
     ),
 }
+
+
+def _character_of(key: str) -> MessageType:
+    name = key.rsplit("_", 1)[0]
+    character = _CHARACTERS_BY_NAME.get(name)
+    if character is None:
+        raise ValueError(f"Clave de conversación mal formada: {key!r} (se espera 'PERSONAJE_NN')")
+    return character
+
+
+# Índice real que usa el player: por personaje, la lista de guiones posibles.
+# Se calcula una vez a partir de `CONVERSATIONS`, así que añadir un guion
+# nuevo (o una variante más de uno que ya existe) sigue siendo tocar solo el
+# dict de ahí arriba.
+_CONVERSATIONS_BY_CHARACTER: dict[MessageType, list[tuple[Line, ...]]] = {}
+for _key, _lines in CONVERSATIONS.items():
+    _CONVERSATIONS_BY_CHARACTER.setdefault(_character_of(_key), []).append(_lines)
+del _key, _lines
 
 
 class ConversationPlayer(QObject):
@@ -97,9 +253,9 @@ class ConversationPlayer(QObject):
         manager.messagePushed.connect(self._on_real_message)
 
     def play_for(self, portrait: MessageType) -> None:
-        lines = CONVERSATIONS.get(portrait)
-        if lines:
-            self.play(lines)
+        candidates = _CONVERSATIONS_BY_CHARACTER.get(portrait)
+        if candidates:
+            self.play(random.choice(candidates))
 
     def play(self, lines) -> None:
         self.stop()

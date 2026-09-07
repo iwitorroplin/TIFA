@@ -1,13 +1,3 @@
-"""Registro de actividad del servidor web, sin usar `src.shared.logs.logger`:
-esa clase pasa por `messages/manager.py`, que importa Qt e instancia un
-`QObject` a nivel de módulo -coste que este proceso, que nunca abre una
-ventana, no tiene por qué pagar-.
-
-Mismo formato de línea que `Logger` para que un log y otro se lean igual, y
-la misma firma de fondo (`Callable[[str], None]`) para que el día que el
-servidor se lance desde la app de escritorio baste con pasarle
-`Logger(ruta, Module.STERIFLOW).log` como `log=` sin tocar `web/server.py`.
-"""
 
 from __future__ import annotations
 
@@ -22,8 +12,10 @@ LOG_FILENAME = "tifa_web.log"
 
 
 def _to_console(line: str) -> None:
-    """Sin consola (pythonw, .exe) `sys.stdout` es None; un print() suelto
-    tumbaría lo único que deja constancia de que el servidor sigue vivo."""
+    """
+    Sin consola (pythonw, .exe) `sys.stdout` es None; un print() suelto
+    tumbaría lo único que deja constancia de que el servidor sigue vivo.
+    """
     if sys.stdout is None:
         return
     try:

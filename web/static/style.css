@@ -8,8 +8,9 @@
    Diferencia deliberada con el escritorio: ahí navbar y message_bar son dos
    columnas fijas de 160px a cada lado. Aquí se entra sobre todo desde el
    móvil, así que la navbar colapsa a una barra horizontal arriba (ver la
-   media query al final) y el aviso es un banner puntual, no una columna
-   permanente. */
+   media query al final). El aviso en sí (message-box) sí es igual que en
+   el escritorio: una caja flotante centrada sobre la pantalla, no una
+   columna ni un banner metido en el flujo de la página. */
 
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
@@ -106,29 +107,89 @@ h1 { font-size: 1.3rem; }
 }
 .portrait svg { width: 100%; height: 100%; display: block; }
 
-/* -- aviso: "qué dice" el personaje que habla, aparte de "quién" ---------- */
+/* -- message-box: "qué dice" el personaje que habla, aparte de "quién" ----
+   Elemento reutilizable creado por static/components/message-box.js, no
+   markup fijo en la plantilla (ver base.html). Antes esto era un
+   <div id="aviso-banner"> dentro de .content-area: al aparecer y
+   desaparecer empujaba el resto de la página -algo sin equivalente en el
+   escritorio-. Ahora flota con position:fixed centrado sobre toda la
+   pantalla, igual que la ventana propia (Qt.Dialog) de
+   src/shared/characters/message_box.py: aparece encima de lo que sea que
+   esté haciendo el usuario, sin desplazar nada. */
 
-.aviso-banner {
+.message-box-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
   display: flex;
   align-items: center;
-  gap: 12px;
-  border: 2px solid #888;
-  border-radius: 10px;
-  padding: 8px 12px;
-  margin-bottom: 16px;
-  background: rgba(127, 127, 127, 0.08);
+  justify-content: center;
+  padding: 16px;
+  background: transparent;
+  pointer-events: none;
 }
-.aviso-cuerpo { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.aviso-nombre { font-size: 0.8rem; }
-.aviso-texto { font-size: 0.95rem; }
-.aviso-cerrar {
+/* Fijar `display` arriba sin condición pisa la regla `[hidden] { display:
+   none }` de la hoja de estilos del propio navegador -un normal de autor
+   siempre gana a un normal de user-agent, tenga la especificidad que tenga-,
+   así que `fondo.hidden = true` en message-box.js no ocultaba nada: el
+   cuadro se quedaba visible y "cerrar" no cerraba nada. Esta regla, más
+   específica que la de arriba, es la que de verdad lo oculta. */
+.message-box-fondo[hidden] {
+  display: none;
+}
+/* WARNING/ERROR "bloquean" -como ApplicationModal en el escritorio-
+   oscureciendo el resto de la página y absorbiendo los clics de fuera sin
+   hacer nada con ellos; SUCCESS/INFO se cierran solos y no necesitan
+   impedir nada mientras tanto (ver _AUTO_CLOSE_MS en message-box.js). */
+.message-box-fondo.bloquea {
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+}
+
+.message-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  width: min(90vw, 480px);
+  padding: 18px 20px;
+  border: 3px solid #fff;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #17366f 0%, #0b1d40 45%, #000 100%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+  animation: message-box-in 0.15s ease-out;
+}
+@keyframes message-box-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+/* Mismo retrato que en .message-bar (izquierda de la ventana), repetido
+   aquí dentro de la caja -igual que self.portrait en message_box.py: "quién
+   habla" también se ve junto a "qué dice", no solo en la barra lateral. */
+.message-box-retrato {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+.message-box-retrato svg { width: 100%; height: 100%; display: block; }
+.message-box-columna {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.message-box-nombre { font-size: 0.95rem; }
+.message-box-texto { margin: 0; color: #fff; font-size: 1rem; white-space: pre-wrap; }
+.message-box-cerrar {
   background: none;
   border: none;
-  font-size: 1.3rem;
+  color: #fff;
+  font-size: 1.4rem;
   line-height: 1;
   cursor: pointer;
   min-height: auto;
-  padding: 4px 8px;
+  padding: 4px 6px;
 }
 
 /* -- home (listado de módulos) -------------------------------------------- */
