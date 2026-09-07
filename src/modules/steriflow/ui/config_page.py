@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLineEdit,
-    QMessageBox,
     QTableWidget,
     QTableWidgetItem,
     QTimeEdit,
@@ -32,8 +31,11 @@ from src.modules.steriflow.logic.config import (
 )
 from src.modules.steriflow.logic.logs import agent_logger
 from src.modules.steriflow.logic.network import MachineStatus
+from src.modules.steriflow.logic.settings_editor import AutoclaveIssue, SettingsIssue
+from src.modules.steriflow.messages import catalog
 from src.shared.assets.resources import MATERIA_GREEN_IMAGE, MATERIA_RED_IMAGE, MATERIA_YELLOW_IMAGE
-from src.shared.messages.types import MessageType
+from src.shared.messages.notice import announce
+from src.shared.ui import notices
 from src.shared.ui.components.app_button import AppButton
 from src.modules.steriflow.tasks.status_checker import AutoclaveStatusChecker
 
@@ -48,6 +50,15 @@ _COL_LOCAL = 3
 _COL_BACKUP = 4
 _COL_ACTIVE = 5
 _COL_STATUS = 6
+
+# La etiqueta de cada estado la da catalog.machine_status_label (compartida
+# con el resumen de conectividad de home_page); el icono es decoración pura,
+# se queda aquí.
+_STATUS_ICONS = {
+    MachineStatus.ONLINE: MATERIA_GREEN_IMAGE,
+    MachineStatus.OFFLINE: MATERIA_RED_IMAGE,
+    MachineStatus.CONNECTION_ERROR: MATERIA_YELLOW_IMAGE,
+}
 
 _STATUS_REFRESH_INTERVAL_MS = 30_000
 
@@ -298,7 +309,7 @@ class SteriflowConfigPage(QWidget):
             return
 
         if self._schedules_table.rowCount() <= 1:
-            QMessageBox.warning(self, "Backup", "Debe quedar al menos un horario configurado.")
+            notices.show(self, catalog.settings_issue(SettingsIssue.AT_LEAST_ONE_SCHEDULE))
             return
 
         self._schedules_table.removeRow(row)
@@ -365,11 +376,8 @@ class SteriflowConfigPage(QWidget):
         if row is None:
             return
 
-        icon, text = {
-            MachineStatus.ONLINE: (MATERIA_GREEN_IMAGE, "En línea"),
-            MachineStatus.OFFLINE: (MATERIA_RED_IMAGE, "Apagada"),
-            MachineStatus.CONNECTION_ERROR: (MATERIA_YELLOW_IMAGE, "Fallo de conexión"),
-        }[status]
+        icon = _STATUS_ICONS[status]
+        text = catalog.machine_status_label(status)
         status_item = QTableWidgetItem(QIcon(str(icon)), text)
         status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         self._autoclaves_table.setItem(row, _COL_STATUS, status_item)
@@ -386,12 +394,12 @@ class SteriflowConfigPage(QWidget):
         fila) ya deja la configuración guardada — no hay un botón "Guardar" aparte."""
         local_root_text = self._local_root_edit.text().strip()
         if not local_root_text:
-            QMessageBox.warning(self, "Backup", "La carpeta raíz local es obligatoria.")
+            notices.show(self, catalog.settings_issue(SettingsIssue.LOCAL_ROOT_REQUIRED))
             return
 
         server_root_text = self._server_root_edit.text().strip()
         if not server_root_text:
-            QMessageBox.warning(self, "Backup", "La carpeta raíz de servidor es obligatoria.")
+            notices.show(self, catalog.settings_issue(SettingsIssue.SERVER_ROOT_REQUIRED))
             return
 
         autoclaves = [
@@ -412,7 +420,7 @@ class SteriflowConfigPage(QWidget):
         ]
 
         if not execution_hours:
-            QMessageBox.warning(self, "Backup", "Debe quedar al menos un horario configurado.")
+            notices.show(self, catalog.settings_issue(SettingsIssue.AT_LEAST_ONE_SCHEDULE))
             return
 
         settings = SteriflowSettings(
@@ -441,9 +449,7 @@ class SteriflowConfigPage(QWidget):
         # este aviso no hay forma de saber que el cambio ha entrado. Y la línea
         # de log es la que explica meses después por qué el backup dejó de
         # copiar: alguien cambió una ruta tal día.
-        agent_logger().log(
-            "Configuración de Steriflow guardada", talk=MessageType.SUCCESS
-        )
+        announce(agent_logger(), catalog.settings_saved())
 
 
 class _AutoclaveDialog(QDialog):
@@ -522,13 +528,13 @@ class _AutoclaveDialog(QDialog):
 
     def accept(self):
         if not self._path_folder_edit.text().strip():
-            QMessageBox.warning(self, "Autoclave", "La carpeta origen es obligatoria.")
+            notices.show(self, catalog.autoclave_issue(AutoclaveIssue.SOURCE_FOLDER_REQUIRED))
             return
         if not self._local_folder_edit.text().strip():
-            QMessageBox.warning(self, "Autoclave", "La carpeta local es obligatoria.")
+            notices.show(self, catalog.autoclave_issue(AutoclaveIssue.LOCAL_FOLDER_REQUIRED))
             return
         if not self._backup_folder_edit.text().strip():
-            QMessageBox.warning(self, "Autoclave", "La carpeta de backup es obligatoria.")
+            notices.show(self, catalog.autoclave_issue(AutoclaveIssue.BACKUP_FOLDER_REQUIRED))
             return
         super().accept()
 

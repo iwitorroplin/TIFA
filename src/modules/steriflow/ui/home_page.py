@@ -20,8 +20,9 @@ from src.shared.ui.components.app_button import (
 )
 
 from src.shared.ui.formatting import format_moment
-from src.shared.messages.manager import manager
-from src.shared.messages.types import MessageType, Module
+from src.modules.steriflow.messages import catalog
+from src.shared.messages.notice import announce, push
+from src.shared.messages.types import Module
 from src.modules.steriflow.tasks.backup_runner import BackupRunner
 from src.modules.steriflow.tasks.status_checker import AutoclaveStatusChecker
 from src.shared.ui.components.loading_overlay import LoadingOverlay
@@ -138,7 +139,7 @@ class SteriflowHomePage(QWidget):
     def _on_check_clicked(self):
         autoclaves = [a for a in self._controller.settings.autoclaves if a.active]
         if not autoclaves:
-            manager.push(Module.STERIFLOW, MessageType.WARNING, "No hay autoclaves activas configuradas.")
+            push(Module.STERIFLOW, catalog.no_active_autoclaves())
             return
 
         self._loading_overlay.start("Comprobando conexión...")
@@ -153,26 +154,9 @@ class SteriflowHomePage(QWidget):
             return
 
         self._loading_overlay.finish()
-        results = self._pending_connectivity_checks
-        all_online = all(value is MachineStatus.ONLINE for value in results.values())
-
-        lines = []
-        for autoclave_name, autoclave_status in results.items():
-            if autoclave_status is MachineStatus.ONLINE:
-                lines.append(f"{autoclave_name}: OK")
-            elif autoclave_status is MachineStatus.OFFLINE:
-                lines.append(f"{autoclave_name}: No OK: Apagada")
-            else:
-                # CONNECTION_ERROR: ni eco ni "inaccesible" (ver
-                # network.check_machine_status) -es lo que se ve en la
-                # práctica cuando la máquina está realmente apagada, así que
-                # sin esta rama la mayoría de los casos no sacaban texto.
-                lines.append(f"{autoclave_name}: No OK: Fallo de conexión")
-
         # Respuesta directa a un clic, no un paso de un proceso: no queda
         # nada que consultar luego en el log, se dice y ya está.
-        message_type = MessageType.SUCCESS if all_online else MessageType.WARNING
-        manager.push(Module.STERIFLOW, message_type, "\n".join(lines))
+        push(Module.STERIFLOW, catalog.connectivity_report(list(self._pending_connectivity_checks.items())))
 
     def _on_fetch_clicked(self):
         self._backup_runner.run(source="home_page", action=self._controller.backup_service.fetch)
@@ -186,11 +170,7 @@ class SteriflowHomePage(QWidget):
         # Al log además de decirlo: que la automatización lleve dos semanas
         # apagada y no haya rastro de cuándo se apagó es lo que convierte un
         # despiste en un agujero de trazabilidad.
-        state = "activados" if checked else "desactivados"
-        agent_logger().log(
-            f"Backups automáticos {state} a mano desde la interfaz",
-            talk=MessageType.INFO,
-        )
+        announce(agent_logger(), catalog.auto_mode_changed(checked))
         self._refresh_status_labels()
 
     def _on_backup_started(self):

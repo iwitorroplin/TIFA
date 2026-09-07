@@ -7,8 +7,9 @@ from PySide6.QtCore import QObject, Signal
 
 from src.modules.steriflow.logic.controller import SteriflowController
 from src.modules.steriflow.logic.logs import agent_logger
+from src.modules.steriflow.messages import catalog
 from src.shared.logs.logger import Logger
-from src.shared.messages.types import MessageType
+from src.shared.messages.notice import announce
 
 
 class BackupRunner(QObject):
@@ -42,10 +43,7 @@ class BackupRunner(QObject):
         logger = agent_logger()
 
         if not self._controller.try_start_run_now():
-            logger.log(
-                f"Backup manual desde {source} ignorado: ya hay una acción en curso",
-                talk=MessageType.WARNING,
-            )
+            announce(logger, catalog.manual_backup_busy(source))
             return False
 
         run_action = action or self._controller.backup_service.run
@@ -63,7 +61,7 @@ class BackupRunner(QObject):
             # es la que sabe qué mitad del pipeline acaba de correr.
             action()
         except Exception as ex:
-            logger.log(f"ERROR en backup manual: {ex}", talk=MessageType.ERROR)
+            announce(logger, catalog.manual_backup_failed(ex))
         finally:
             self._controller.finish_run_now()
             self.finished.emit()

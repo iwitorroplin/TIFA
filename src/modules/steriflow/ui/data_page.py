@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -24,7 +23,10 @@ from PySide6.QtWidgets import (
 from src.shared.db.connection import connect
 from src.modules.steriflow.logic.config import load_settings
 from src.modules.steriflow.logic.logs import agent_logger
-from src.shared.messages.types import MessageType
+from src.modules.steriflow.messages import catalog
+from src.modules.steriflow.messages.catalog import OpenFailure
+from src.shared.messages.notice import announce
+from src.shared.ui import notices
 from src.modules.steriflow.logic.sterilization import repo
 from src.modules.steriflow.logic.sterilization import service as sterilization_service
 from src.modules.steriflow.logic.sterilization.models import SterilizationCycle
@@ -353,7 +355,7 @@ class SteriflowDataPage(QWidget):
     def _open_selected_pdfs(self):
         cycles = self._selected_cycles()
         if not cycles:
-            QMessageBox.information(self, "Abrir PDF", "Selecciona al menos un ciclo.")
+            notices.show(self, catalog.no_cycles_selected_to_open())
             return
         self._open_pdfs(cycles)
 
@@ -363,17 +365,17 @@ class SteriflowDataPage(QWidget):
         for cycle in cycles:
             ruta = sterilization_service.find_pdf(settings, cycle.source_filename)
             if ruta is None:
-                fallos.append(f"{cycle.source_filename}: no se encuentra el fichero")
+                fallos.append((cycle.source_filename, OpenFailure.NOT_FOUND))
             elif not QDesktopServices.openUrl(QUrl.fromLocalFile(str(ruta))):
-                fallos.append(f"{cycle.source_filename}: el sistema no pudo abrirlo")
+                fallos.append((cycle.source_filename, OpenFailure.CANNOT_OPEN))
 
         if fallos:
-            QMessageBox.warning(self, "Abrir PDF", "No se pudieron abrir:\n" + "\n".join(fallos))
+            notices.show(self, catalog.pdfs_not_opened(fallos))
 
     def _print_selected(self):
         cycles = self._selected_cycles()
         if not cycles:
-            QMessageBox.information(self, "Imprimir", "Selecciona al menos un ciclo para imprimir.")
+            notices.show(self, catalog.no_cycles_selected_to_print())
             return
 
         self._print_job(cycles).preview(self)
@@ -381,7 +383,7 @@ class SteriflowDataPage(QWidget):
     def _export_selected_to_pdf(self):
         cycles = self._selected_cycles()
         if not cycles:
-            QMessageBox.information(self, "Guardar PDF", "Selecciona al menos un ciclo para guardar.")
+            notices.show(self, catalog.no_cycles_selected_to_export())
             return
 
         destino = printing.ask_pdf_path(self, f"{_PRINT_PDF_PREFIX}_{dt.datetime.now():%Y%m%d_%H%M}.pdf")
@@ -395,12 +397,10 @@ class SteriflowDataPage(QWidget):
         try:
             self._print_job(cycles).export_pdf(destino)
         except OSError as ex:
-            logger.log(f"No se pudo guardar el PDF '{destino}': {ex}", talk=MessageType.ERROR)
+            announce(logger, catalog.cycles_pdf_save_failed(destino, ex))
             return
 
-        logger.log(
-            f"PDF de {len(cycles)} ciclo(s) guardado en {destino}", talk=MessageType.SUCCESS
-        )
+        announce(logger, catalog.cycles_pdf_saved(len(cycles), destino))
 
     def _print_job(self, cycles: list[SterilizationCycle]) -> printing.PrintJob:
         """La tabla de la selección, lista tanto para la impresora como para el PDF."""

@@ -7,8 +7,9 @@ from src.modules.steriflow.logic.backup.reports import new_reports
 from src.modules.steriflow.logic.backup.robocopy import run_robocopy
 from src.modules.steriflow.logic.config import AutoclaveConfig, SteriflowSettings
 from src.modules.steriflow.logic.logs import new_backup_logger
+from src.modules.steriflow.messages import catalog
 from src.shared.logs.logger import Logger
-from src.shared.messages.types import MessageType
+from src.shared.messages.notice import announce
 from src.modules.steriflow.logic.network import is_reachable
 from src.modules.steriflow.logic.sterilization import service as sterilization_service
 
@@ -23,10 +24,19 @@ class BackupService:
     es lo que dispara el `Scheduler` automático: las dos mitades seguidas,
     sobre un único log de ejecución.
 
-    Cada acción anuncia su propio final con `talk=` (una línea de log de las
-    cientos que escribe): es la que sabe qué acaba de correr, así el aviso al
-    usuario sale igual venga de un botón o del scheduler de las 3 de la
-    mañana, sin que la interfaz tenga que repetir el texto."""
+    Cada acción anuncia su propio final con `announce()` (`messages/catalog.py`,
+    una línea de las cientos que escribe el log): es la que sabe qué acaba de
+    correr, así el aviso al usuario sale igual venga de un botón o del
+    scheduler de las 3 de la mañana, sin que la interfaz tenga que repetir el
+    texto.
+
+    Ese aviso final tiene que decir la verdad: un fallo con una autoclave no
+    corta el pipeline -una máquina apagada no debe impedir copiar el resto-,
+    así que sin contar las incidencias un SUCCESS en verde taparía media copia
+    sin hacer. Solo cuentan fallos de verdad (una excepción, o robocopy
+    devolviendo 8 o más); una autoclave inactiva, apagada o sin carpeta de
+    origen es un salto previsto, no una incidencia -si contara, casi todas las
+    noches acabarían en WARNING y el aviso dejaría de significar nada-."""
 
     def __init__(self, settings: SteriflowSettings) -> None:
         self._settings = settings
@@ -35,46 +45,28 @@ class BackupService:
         logger = self._new_logger()
         logger.log("PASO 0: Prepara la carpeta de logs y el archivo de log de esta ejecución")
         incidencias = self._fetch_all(logger) + self._backup_all(logger)
-        self._announce_end(logger, "Backup Steriflow finalizado", incidencias)
+        announce(logger, catalog.full_backup_finished(incidencias))
 
     def fetch(self) -> None:
         """Acción manual: solo trae los PDF nuevos de las autoclaves a su carpeta local."""
         logger = self._new_logger()
         logger.log("PASO 0: Prepara la carpeta de logs y el archivo de log de esta ejecución")
         incidencias = self._fetch_all(logger)
-        self._announce_end(logger, "Traída desde las máquinas finalizada", incidencias)
+        announce(logger, catalog.fetch_finished(incidencias))
 
     def backup(self) -> None:
         """Acción manual: solo replica lo que ya hay en local hacia el servidor de cada autoclave."""
         logger = self._new_logger()
         logger.log("PASO 0: Prepara la carpeta de logs y el archivo de log de esta ejecución")
         incidencias = self._backup_all(logger)
-        self._announce_end(logger, "Backup a servidor finalizado", incidencias)
-
-    def _announce_end(self, logger: Logger, done_message: str, incidencias: int) -> None:
-        """El único mensaje que ve el usuario de toda la ejecución, y tiene que
-        decir la verdad: un fallo con una autoclave no corta el pipeline -una
-        máquina apagada no debe impedir copiar el resto-, así que sin contarlos
-        un SUCCESS en verde taparía media copia sin hacer.
-
-        Cuenta solo fallos de verdad (una excepción, o robocopy devolviendo 8 o
-        más). Una autoclave inactiva, apagada o sin carpeta de origen es un
-        salto previsto, no una incidencia: si contara, casi todas las noches
-        acabarían en WARNING y el aviso dejaría de significar nada.
-        """
-        if incidencias:
-            logger.log(
-                f"{done_message}, con {incidencias} incidencia(s): ver el detalle más arriba en este log",
-                talk=MessageType.WARNING,
-            )
-        else:
-            logger.log(done_message, talk=MessageType.SUCCESS)
+        announce(logger, catalog.server_backup_finished(incidencias))
 
     def _new_logger(self) -> Logger:
         return new_backup_logger()
 
     def _fetch_all(self, logger: Logger) -> int:
-        """Devuelve cuántas autoclaves fallaron (ver `_announce_end`)."""
+        """Devuelve cuántas autoclaves fallaron: la cuenta que decide si el
+        aviso final es SUCCESS o WARNING (ver la clase `BackupService`)."""
         incidencias = 0
         for autoclave in self._settings.autoclaves:
             if not autoclave.active:
@@ -88,7 +80,8 @@ class BackupService:
         return incidencias
 
     def _backup_all(self, logger: Logger) -> int:
-        """Devuelve cuántas autoclaves fallaron (ver `_announce_end`)."""
+        """Devuelve cuántas autoclaves fallaron: la cuenta que decide si el
+        aviso final es SUCCESS o WARNING (ver la clase `BackupService`)."""
         # Una única conexión para todo el backup: se abre y se cierra aquí en
         # vez de en cada autoclave, y en este hilo -nunca el de la interfaz-,
         # que es el único que la usa (ver `BackupRunner`).
