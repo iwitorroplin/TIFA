@@ -19,25 +19,18 @@ class HomeView(QWidget):
         super().__init__()
 
         app_settings = load_app_settings()
-
-        # Fondo de Midgar. MIDGAR_IMAGE es un PNG ya rasterizado desde
-        # Inkscape (ver assets.py): la versión vectorial tardaba segundos en
-        # rasterizarse en cada resize. Se pinta en paintEvent en vez de con
-        # un QLabel hermano: así el logo y los textos, al ser hijos de este
-        # widget, se dibujan siempre encima sin depender de z-order ni de
-        # atributos de transparencia.
         self._background = QPixmap(str(MIDGAR_IMAGE))
 
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Logo de la app, centrado en la vista. APP_LOGO es un SVG vectorial.
+        # Logo de la app, centrado en la vista
         image_logo = QLabel()
         image_logo.setPixmap(QPixmap(str(APP_LOGO_V2)))
         image_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(image_logo)
 
-        # label de bienvenida, centrado en la vista
+        # label de bienvenida
         label_welcome = QLabel(f"Bienvenido a {app_settings.name}")
         label_welcome.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label_welcome.setStyleSheet(

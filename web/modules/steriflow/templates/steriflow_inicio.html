@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from "_tab_bar.html" import tab_bar with context %}
+{% block titulo %}TIFA · Steriflow{% endblock %}
+
+{% block content %}
+<h1>Steriflow</h1>
+{{ tab_bar([
+  {'label': 'Home', 'url': '/steriflow'},
+  {'label': 'Lectura', 'url': '/steriflow/lectura'},
+  {'label': 'Historial', 'url': '/steriflow/historial'},
+]) }}
+
+<p>Registro rápido de temperatura desde cualquier ordenador o móvil de la red.</p>
+
+<div class="card-links">
+  <a class="card-link" href="/steriflow/lectura">+ Nueva lectura</a>
+  <a class="card-link" href="/steriflow/historial">Ver historial</a>
+</div>
+
+<p><strong>Última lectura:</strong> <span id="ultima">—</span></p>
+{% endblock %}
+
+{% block script %}
+<script>
+async function cargarUltima() {
+  const res = await fetch('/api/steriflow?limit=1');
+  const lecturas = await res.json();
+  const span = document.getElementById('ultima');
+  if (lecturas.length === 0) {
+    span.textContent = 'todavía no hay lecturas';
+    return;
+  }
+  const l = lecturas[0];
+  const fecha = (l.created_at || '').replace('T', ' ').slice(0, 19);
+  span.textContent = `${l.temp_c} °C — ${fecha}${l.created_by ? ' (' + l.created_by + ')' : ''}`;
+}
+cargarUltima();
+</script>
+{% endblock %}

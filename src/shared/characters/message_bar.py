@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
@@ -7,7 +7,7 @@ from src.shared.characters.portrait import tinted_portrait
 from src.shared.characters.senders import ACCENT_COLORS, SENDERS
 from src.shared.messages.manager import manager
 from src.shared.messages.message import Message
-from src.shared.messages.types import Delivery, MessageType
+from src.shared.messages.types import MessageType
 
 _PORTRAIT_SIZE = 96
 
@@ -26,9 +26,16 @@ class MessageBar(QWidget):
     """Columna vertical a la derecha de la ventana, simétrica a Navbar a la
     izquierda (ver window_app.py): quién está hablando y el MessageBox del
     último mensaje, sin importar la página activa. Solo escucha `manager`:
-    los módulos disparan con `manager.push(...)`, no llamando a este widget
-    directamente.
+    los módulos disparan con `Logger.log(..., talk=...)` (o `manager.push(...)`
+    para un aviso que no va al log), no llamando a este widget directamente.
+
+    Lo único que expone hacia fuera es `portraitDoubleClicked`: la barra sabe
+    qué retrato se ha pulsado, pero no qué hacer con eso -de las conversaciones
+    se encarga `conversation.py`, que es un añadido y no parte del sistema de
+    avisos-.
     """
+
+    portraitDoubleClicked = Signal(MessageType)
 
     def __init__(self):
         super().__init__()
@@ -46,11 +53,22 @@ class MessageBar(QWidget):
         for message_type in _PORTRAIT_ORDER:
             label = QLabel()
             label.setFixedSize(_PORTRAIT_SIZE, _PORTRAIT_SIZE)
+            # QLabel no tiene señal de doble clic: se filtra el evento y se
+            # reemite ya diciendo de qué retrato viene.
+            label.installEventFilter(self)
             self._portrait_labels[message_type] = label
             layout.addWidget(label, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         self._refresh_portraits()
         manager.messagePushed.connect(self._on_message_pushed)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.MouseButtonDblClick:
+            for message_type, label in self._portrait_labels.items():
+                if watched is label:
+                    self.portraitDoubleClicked.emit(message_type)
+                    return True
+        return super().eventFilter(watched, event)
 
     def _refresh_portraits(self) -> None:
         for message_type, label in self._portrait_labels.items():
@@ -63,24 +81,28 @@ class MessageBar(QWidget):
             label.setPixmap(tinted_portrait(sender, color, _PORTRAIT_SIZE))
 
     def _on_message_pushed(self, message: Message) -> None:
-        if message.delivery is Delivery.SILENT:
-            # Ya quedó en manager.history; no lo anuncia ningún personaje.
-            return
-
+        # Un mensaje nuevo sustituye al anterior en vez de apilarse: aquí solo
+        # se ve lo inmediato -lo acumulado se consulta en la pestaña Logs-.
         if self._message_box is not None:
             self._message_box.close()
 
         self._talking_type = message.type
         self._refresh_portraits()
 
-        box = MessageBox(message.type, message.text, parent=self.window())
+        window = self.window()
+        box = MessageBox(message.type, message.text, parent=window)
         box.closed.connect(lambda: self._on_message_closed(box))
-        box.move(
-            (self.window().width() - box.width()) // 2,
-            (self.window().height() - box.height()) // 2,
-        )
+
+        # El cuadro es una ventana propia (ver MessageBox), así que move() va
+        # en coordenadas de pantalla: se centra sobre la ventana principal, no
+        # sobre este widget.
+        center = window.frameGeometry().center()
+        box.move(center.x() - box.width() // 2, center.y() - box.height() // 2)
+
         box.show()
         box.raise_()
+        # Foco de teclado, para que el OK responda a Intro y Esc cierre.
+        box.activateWindow()
         self._message_box = box
 
     def _on_message_closed(self, box: MessageBox) -> None:

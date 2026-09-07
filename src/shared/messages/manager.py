@@ -1,44 +1,29 @@
 from PySide6.QtCore import QObject, Signal
 
 from src.shared.messages.message import Message
-from src.shared.messages.types import Delivery, MessageType, Module
+from src.shared.messages.types import MessageType, Module
 
 
 class MessageManager(QObject):
-    """Punto central por el que cualquier módulo emite un Message.
+    """Bus por el que pasa lo que un personaje dice en voz alta.
 
-    No se instancia por módulo: se usa la instancia compartida `manager`
-    de este archivo, así ninguna vista necesita recibirla por constructor.
-    Guarda todo en `history` aunque nadie esté mirando cuando se emite, y
-    sea cual sea `delivery` -el auto-cierre o el silencio de un mensaje no
-    le hacen perder rastro-.
+    Es un bus, no un almacén: no guarda historial. Un mensaje que nadie ve en
+    el momento se pierde a propósito -el rastro consultable son los ficheros
+    de log de cada módulo, que la pestaña Logs del navbar muestra en vivo-.
+
+    No se instancia por módulo: se usa la instancia compartida `manager` de
+    este archivo, así ninguna vista necesita recibirla por constructor.
+
+    `push()` es seguro desde un hilo de trabajo: `messagePushed` la recibe
+    `MessageBar`, que vive en el hilo de la interfaz, así que Qt entrega la
+    llamada encolada en ese hilo (por eso `Logger.log(..., talk=...)` puede
+    hablar desde dentro de un backup en segundo plano).
     """
 
     messagePushed = Signal(Message)
 
-    def __init__(self):
-        super().__init__()
-        self._history: list[Message] = []
-
-    def push(
-        self,
-        module: Module,
-        type: MessageType,
-        text: str,
-        delivery: Delivery = Delivery.CHARACTER,
-    ) -> Message:
-        # DEBUG es silencioso siempre, sin excepción: ni pasando
-        # delivery=CHARACTER se le puede poner un personaje a hablar.
-        if type is MessageType.DEBUG:
-            delivery = Delivery.SILENT
-        message = Message(module=module, type=type, text=text, delivery=delivery)
-        self._history.append(message)
-        self.messagePushed.emit(message)
-        return message
-
-    @property
-    def history(self) -> list[Message]:
-        return list(self._history)
+    def push(self, module: Module, type: MessageType, text: str) -> None:
+        self.messagePushed.emit(Message(module=module, type=type, text=text))
 
 
 # Instancia compartida: `from src.shared.messages.manager import manager`.

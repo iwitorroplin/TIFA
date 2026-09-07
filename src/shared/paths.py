@@ -16,6 +16,13 @@ else:
 CONFIG_DIR = PROJECT_ROOT / "config"
 ASSETS_DIR = PROJECT_ROOT / "assets"
 DATA_DIR = PROJECT_ROOT / "data"
+# Logs que no son de ningún módulo (ver src/app/housekeeping.py); los de
+# cada módulo cuelgan de su propia configuración.
+LOGS_DIR = DATA_DIR / "logs"
+# Aquí y no en housekeeping.py: la pestaña de Configuración también escribe
+# en él, y housekeeping importa el registro de módulos -importarlo desde
+# un módulo cerraría el ciclo-.
+APP_LOG_PATH = LOGS_DIR / "tifa.log"
 
 
 def resolve_path(value: str) -> Path:

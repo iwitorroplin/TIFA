@@ -1,6 +1,6 @@
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QIcon
-from PySide6.QtWidgets import QMessageBox, QPushButton, QToolButton
+from PySide6.QtWidgets import QPushButton, QToolButton
 
 from src.shared.assets.resources import (
     FOLDER_IMAGE,
@@ -8,6 +8,7 @@ from src.shared.assets.resources import (
     MATERIA_STOP_IMAGE
 )
 
+from src.shared.messages.types import MessageType
 from src.shared.utils.folders import open_folder
 
 
@@ -89,8 +90,13 @@ class AppFolderButton(_AppIconButton):
         self.clicked.connect(self._on_clicked)
 
     def _on_clicked(self):
+        # `open_folder` ya deja el motivo en el log; esta línea es la que ve el
+        # usuario. Una carpeta de servidor que no abre suele ser la red caida,
+        # que es justo lo que conviene saber antes del próximo backup.
         if not open_folder(self._path, self._logger, create=self._create):
-            QMessageBox.warning(self, "Abrir carpeta", f"No se pudo abrir la carpeta:\n{self._path}")
+            self._logger.log(
+                f"No se pudo abrir la carpeta: {self._path}", talk=MessageType.WARNING
+            )
 
 
 class AppStartButton(_AppIconButton):

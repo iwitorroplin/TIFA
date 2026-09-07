@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.modules.steriflow.logic.controller import SteriflowController
+from src.modules.steriflow.logic.controller import AGENT_LOG_FILENAME, SteriflowController
 from src.modules.steriflow.logic.config import (
     AutoclaveConfig,
     ScheduleConfig,
@@ -32,6 +32,8 @@ from src.modules.steriflow.logic.config import (
 )
 from src.modules.steriflow.logic.network import MachineStatus
 from src.shared.assets.resources import MATERIA_GREEN_IMAGE, MATERIA_RED_IMAGE, MATERIA_YELLOW_IMAGE
+from src.shared.logs.logger import Logger
+from src.shared.messages.types import MessageType, Module
 from src.shared.ui.components.app_button import AppButton
 from src.modules.steriflow.ui.status_checker import AutoclaveStatusChecker
 
@@ -436,9 +438,23 @@ class SteriflowConfigPage(QWidget):
             schedule=ScheduleConfig(execution_hours=execution_hours),
         )
 
+        # `editingFinished` salta cada vez que un campo pierde el foco, haya
+        # cambiado o no: sin esta comparación, pasear por la página guardaba,
+        # reiniciaba el scheduler y sacaba un "guardada" cada dos clics.
+        if settings == self._controller.settings:
+            return
+
         save_settings(settings)
         self._controller.reload()
         self._load_from_settings(self._controller.settings)
+
+        # Esta página no tiene botón "Guardar" -se persiste sola-, así que sin
+        # este aviso no hay forma de saber que el cambio ha entrado. Y la línea
+        # de log es la que explica meses después por qué el backup dejó de
+        # copiar: alguien cambió una ruta tal día.
+        Logger(settings.paths.logs_root / AGENT_LOG_FILENAME, Module.STERIFLOW).log(
+            "Configuración de Steriflow guardada", talk=MessageType.SUCCESS
+        )
 
 
 class _AutoclaveDialog(QDialog):

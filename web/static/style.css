@@ -1,0 +1,219 @@
+/* CSS compartido por todas las páginas de la parte web (base.html + cada
+   plantilla de módulo). Reproduce en HTML/CSS el mismo diseño de
+   src/app/nav_bar.py + src/shared/ui/components/tab_bar.py + message_bar.py
+   -no se puede reutilizar ese código (es Qt), pero sí el mismo lenguaje
+   visual: botón redondeado con sombra, color por módulo, retrato que se
+   ilumina cuando "habla".
+
+   Diferencia deliberada con el escritorio: ahí navbar y message_bar son dos
+   columnas fijas de 160px a cada lado. Aquí se entra sobre todo desde el
+   móvil, así que la navbar colapsa a una barra horizontal arriba (ver la
+   media query al final) y el aviso es un banner puntual, no una columna
+   permanente. */
+
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* -- navbar (vertical, por módulo) -------------------------------------- */
+
+.navbar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 180px;
+  flex-shrink: 0;
+  padding: 12px;
+  background: #23262b;
+}
+.nav-link {
+  --nav-color: #595f66;
+  display: block;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--nav-color);
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  transition: filter 0.15s;
+}
+.nav-link:hover { filter: brightness(1.2); }
+/* Módulo activo: más oscuro, como el estado "checked" de NavButton. */
+.nav-link.active { filter: brightness(0.75); }
+
+/* Sin sesión: la navbar no tiene nada que ofrecer todavía. */
+.navbar-empty {
+  color: white;
+  font-weight: 700;
+  padding: 10px 14px;
+}
+
+/* -- contenido ------------------------------------------------------------ */
+
+.content-area {
+  flex: 1;
+  min-width: 0;
+  padding: 16px;
+  max-width: 760px;
+}
+
+h1 { font-size: 1.3rem; }
+
+/* -- tab-bar (horizontal, dentro de un módulo) ---------------------------- */
+
+.tab-bar {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0 20px;
+}
+.tab-link {
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #595f66;
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.tab-link:hover { filter: brightness(1.15); }
+.tab-link.active { filter: brightness(0.75); }
+
+/* -- message-bar: personajes siempre visibles (equivalente de MessageBar) - */
+
+.message-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 160px;
+  flex-shrink: 0;
+  padding: 16px 12px;
+}
+.portrait {
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+}
+.portrait svg { width: 100%; height: 100%; display: block; }
+
+/* -- aviso: "qué dice" el personaje que habla, aparte de "quién" ---------- */
+
+.aviso-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 2px solid #888;
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  background: rgba(127, 127, 127, 0.08);
+}
+.aviso-cuerpo { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.aviso-nombre { font-size: 0.8rem; }
+.aviso-texto { font-size: 0.95rem; }
+.aviso-cerrar {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  min-height: auto;
+  padding: 4px 8px;
+}
+
+/* -- home (listado de módulos) -------------------------------------------- */
+
+.module-list { list-style: none; padding: 0; }
+.module-list li { margin-bottom: 8px; }
+.module-list a { font-size: 1.1rem; }
+
+.card-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+.card-link {
+  flex: 1;
+  min-width: 160px;
+  padding: 16px;
+  border-radius: 10px;
+  background: #3f51b5;
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+  text-align: center;
+}
+.card-link:hover { filter: brightness(1.1); }
+
+/* -- formularios y tablas -------------------------------------------------- */
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+label { font-size: 0.9rem; font-weight: 600; }
+input, textarea, button {
+  font-size: 1rem;
+  padding: 10px;
+  min-height: 44px; /* objetivo táctil cómodo en móvil */
+  border-radius: 6px;
+  border: 1px solid #888;
+}
+textarea { min-height: 60px; resize: vertical; }
+button {
+  background: #3f51b5;
+  color: white;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:active { opacity: 0.85; }
+
+.table-toolbar { margin-bottom: 12px; }
+.table-toolbar button { min-height: 38px; padding: 6px 14px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #ccc; }
+
+/* -- responsive: navbar vertical -> barra superior en móvil ---------------- */
+
+@media (max-width: 700px) {
+  .app-shell { flex-direction: column; }
+  .navbar {
+    order: 0;
+    flex-direction: row;
+    width: auto;
+    overflow-x: auto;
+    align-items: center;
+    padding: 8px;
+  }
+  .nav-link { flex-shrink: 0; }
+
+  /* Los personajes bajan a una tira horizontal entre la navbar y el
+     contenido -sin esto se irían al final de la página, debajo de tablas
+     largas, y dejarían de estar "siempre visibles" en la práctica. */
+  .message-bar {
+    order: 1;
+    flex-direction: row;
+    justify-content: center;
+    width: auto;
+    padding: 8px;
+    gap: 20px;
+  }
+  .portrait { width: 40px; height: 40px; }
+
+  .content-area { order: 2; max-width: none; }
+}

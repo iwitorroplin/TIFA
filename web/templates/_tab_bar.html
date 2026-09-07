@@ -1,0 +1,15 @@
+{# Barra de pestañas dentro de un módulo -equivalente web de
+   src/shared/ui/components/tab_bar.py. Se importa con "with context" para
+   que `request` (inyectado por Jinja2Templates) llegue hasta aquí y pueda
+   marcar la pestaña activa por URL exacta.
+
+   `tabs` es una lista de {"label": ..., "url": ...}; cada módulo con
+   pestañas construye la suya en su propia plantilla (ver
+   web/modules/steriflow/templates/). #}
+{% macro tab_bar(tabs) %}
+<nav class="tab-bar">
+  {% for tab in tabs %}
+  <a class="tab-link{% if request.url.path == tab.url %} active{% endif %}" href="{{ tab.url }}">{{ tab.label }}</a>
+  {% endfor %}
+</nav>
+{% endmacro %}

@@ -8,3 +8,9 @@ app:
 ui:
   dateFormat: "dd/MM/yyyy"
   timeFormat: "HH:mm:ss"
+
+logs:
+  # Los logs son el historial de la app (pestaña Logs): al arrancar se
+  # borran los que pasen de esta antigüedad. 0 = no borrar nunca.
+  # Se edita desde la pestaña Configuración.
+  retentionMonths: 12

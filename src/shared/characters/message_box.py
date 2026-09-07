@@ -1,6 +1,6 @@
 import sys
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QPainter, QLinearGradient, QColor, QFont, QTextOption
 from PySide6.QtWidgets import (
     QApplication,
@@ -30,6 +30,21 @@ _MAX_HEIGHT = 480
 # retrato se tiñen según el tipo de mensaje.
 _BORDER_COLOR = QColor("#ffffff")
 
+# Cuánto se queda en pantalla un mensaje que solo confirma ("backup
+# finalizado"): se cierra solo, sin pedir un clic por cada acción. WARNING y
+# ERROR no están aquí a propósito -esos esperan a que el usuario los lea y
+# pulse OK-.
+_AUTO_CLOSE_MS: dict[MessageType, int] = {
+    MessageType.INFO: 3500,
+    MessageType.SUCCESS: 3500,
+}
+
+# Una sola regla, dos comportamientos: o el mensaje se va solo, o bloquea la
+# ventana hasta que lo cierres tú. Nunca las dos cosas y nunca ninguna -un
+# aviso que se queda flotando mientras cambias de pestaña no es ni lo uno ni
+# lo otro: ni te ha dejado seguir, ni te has enterado-. Así que lo que no
+# está en _AUTO_CLOSE_MS (WARNING y ERROR) sale modal.
+
 
 class MessageBox(QWidget):
 
@@ -42,8 +57,32 @@ class MessageBox(QWidget):
         message_type=MessageType.INFO,
         message="Operación completada correctamente.",
         parent=None,
+        *,
+        auto_close: bool = True,
     ):
         super().__init__(parent)
+
+        # Ventana propia (Qt.Dialog), no un widget hijo pegado encima de
+        # MainWindow: setWindowModality solo tiene efecto sobre ventanas, así
+        # que siendo un hijo no había forma de bloquear nada. FramelessWindow
+        # mantiene el aspecto de siempre (sin barra de título de Windows), y
+        # Qt.Dialog no crea entrada propia en la barra de tareas.
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+
+        # Modal de aplicación, pero con `show()`, no con `exec()`: bloquea la
+        # entrada del usuario sobre el resto de la app sin abrir un bucle de
+        # eventos anidado. Lo segundo importa porque MessageBar cierra y
+        # sustituye el cuadro en curso cuando llega otro mensaje -con exec()
+        # se irían apilando bucles unos dentro de otros-, y porque un backup
+        # en segundo plano tiene que poder seguir avisando.
+        # `auto_close=False` fuerza un cuadro que espera al usuario aunque su
+        # personaje sea de los que se van solos: lo usan las conversaciones
+        # (ver conversation.py), que se leen al ritmo de quien las lee. La
+        # regla no cambia -o se cierra solo, o bloquea-, solo se elige el otro
+        # lado para ese cuadro concreto.
+        self._blocks_window = not auto_close or message_type not in _AUTO_CLOSE_MS
+        if self._blocks_window:
+            self.setWindowModality(Qt.WindowModality.ApplicationModal)
 
         self._accent_color = ACCENT_COLORS[message_type]
         sender = SENDERS[message_type]
@@ -80,6 +119,17 @@ class MessageBox(QWidget):
         self.ok_button.setFixedSize(90, 32)
         self.ok_button.setFont(QFont("Arial", 11))
         self.ok_button.clicked.connect(self.close)
+
+        # Temporizador de auto-cierre, hijo del propio cuadro: si el usuario
+        # cierra antes con OK, muere con él y no dispara sobre un widget ya
+        # destruido.
+        self._auto_close_timer = None
+        auto_close_ms = _AUTO_CLOSE_MS.get(message_type) if auto_close else None
+        if auto_close_ms is not None:
+            self._auto_close_timer = QTimer(self)
+            self._auto_close_timer.setSingleShot(True)
+            self._auto_close_timer.setInterval(auto_close_ms)
+            self._auto_close_timer.timeout.connect(self.close)
 
         # Columna de texto: nombre + mensaje
         self._text_layout = QVBoxLayout()
@@ -164,6 +214,21 @@ class MessageBox(QWidget):
         else:
             self.message_label.setFixedHeight(text_height)
             self.setFixedHeight(max(_MIN_HEIGHT, natural_height))
+
+    def showEvent(self, event):
+        # La cuenta atrás empieza al verse, no al construirse: MessageBar
+        # crea el cuadro, lo coloca y luego lo muestra.
+        super().showEvent(event)
+        if self._auto_close_timer is not None:
+            self._auto_close_timer.start()
+
+    def keyPressEvent(self, event):
+        # Sin barra de título no hay aspa que cerrar, y si el cuadro es modal
+        # el OK sería la única salida de toda la aplicación: Esc también vale.
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+            return
+        super().keyPressEvent(event)
 
     def closeEvent(self, event):
         super().closeEvent(event)

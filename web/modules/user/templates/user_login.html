@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block titulo %}TIFA · Iniciar sesión{% endblock %}
+
+{% block content %}
+<h1>Iniciar sesión</h1>
+<form id="login-form">
+  <div>
+    <label for="name">Usuario</label>
+    <input type="text" id="name" maxlength="120" required autocomplete="username">
+  </div>
+  <div>
+    <label for="password">Contraseña</label>
+    <input type="password" id="password" required autocomplete="current-password">
+  </div>
+  <button type="submit">Entrar</button>
+</form>
+{% endblock %}
+
+{% block script %}
+<script>
+const form = document.getElementById('login-form');
+const siguiente = {{ next | tojson }};
+
+form.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const cuerpo = {
+    name: document.getElementById('name').value,
+    password: document.getElementById('password').value,
+  };
+  const res = await fetch('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+  const datos = await res.json();
+  if (res.ok) {
+    window.location.href = (siguiente && siguiente !== '/login') ? siguiente : datos.next;
+  } else {
+    mostrarAviso('error', datos.error || 'No se pudo iniciar sesión.');
+  }
+});
+</script>
+{% endblock %}
