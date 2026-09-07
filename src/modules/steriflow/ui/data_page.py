@@ -20,15 +20,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.modules.steriflow.logic.config import load_settings
 from src.modules.steriflow.logic.logs import agent_logger
 from src.modules.steriflow.messages import catalog
 from src.modules.steriflow.messages.catalog import OpenFailure
 from src.shared.messages.notice import announce
 from src.shared.ui import notices
-from src.modules.steriflow.logic.sterilization import service as sterilization_service
-from src.modules.steriflow.logic.sterilization.models import SterilizationCycle
-from src.modules.steriflow.logic.sterilization.queries import CycleFilters, cycle_page
+from src.modules.steriflow.ui.data_presenter import DEFAULT_PAGE_SIZE, SteriflowDataPresenter
 from src.shared.ui.components.app_button import AppButton
 from src.shared.ui import printing
 
@@ -79,49 +76,17 @@ _PRINT_ALIGNS = [
 ]
 
 _PAGE_SIZES = [20, 50, 100]
-_DEFAULT_PAGE_SIZE = 50
 # Al escribir en el filtro de producto se espera a que el usuario pare de
 # teclear antes de volver a consultar la base de datos, para no lanzar una
 # consulta por cada letra.
 _FILTER_DEBOUNCE_MS = 300
 
 
-def _format_duration(seconds: int | None) -> str:
-    if seconds is None:
-        return "—"
-    horas, resto = divmod(int(seconds), 3600)
-    minutos, segundos = divmod(resto, 60)
-    return f"{horas:02d}:{minutos:02d}:{segundos:02d}"
-
-
-def _format_temp(value: float | None) -> str:
-    return "—" if value is None else f"{value:.2f}"
-
-# Las mismas columnas que se ven en pantalla, en texto plano: el escapado, el
-# HTML y la paginación son cosa de src.shared.ui.printing.
-def _print_row(cycle: SterilizationCycle) -> list[str]:
-    return [
-        str(cycle.autoclave_code),
-        cycle.started_at.strftime("%d/%m/%Y %H:%M:%S"),
-        cycle.product,
-        cycle.batch,
-        cycle.cycle_number,
-        _format_duration(cycle.sterilization_duration_s),
-        _format_temp(cycle.sterilization_temp_mean_c),
-        _format_temp(cycle.sterilization_temp_min_c),
-        _format_temp(cycle.sterilization_temp_max_c),
-        cycle.review_notes if cycle.needs_review else "",
-    ]
-
-
 class SteriflowDataPage(QWidget):
     def __init__(self):
         super().__init__()
 
-        self._page_size = _DEFAULT_PAGE_SIZE
-        self._current_page = 0
-        self._total_count = 0
-        self._row_cycles: list[SterilizationCycle] = []
+        self._presenter = SteriflowDataPresenter()
 
         self._filter_debounce = QTimer(self)
         self._filter_debounce.setSingleShot(True)
@@ -142,7 +107,7 @@ class SteriflowDataPage(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self._reload_cycles()
+        self._refresh()
 
     def _build_cycles_table(self):
         table = QTableWidget(0, len(_HEADERS))
@@ -219,7 +184,7 @@ class SteriflowDataPage(QWidget):
         self._page_size_combo = QComboBox()
         for size in _PAGE_SIZES:
             self._page_size_combo.addItem(str(size), userData=size)
-        self._page_size_combo.setCurrentIndex(_PAGE_SIZES.index(_DEFAULT_PAGE_SIZE))
+        self._page_size_combo.setCurrentIndex(_PAGE_SIZES.index(DEFAULT_PAGE_SIZE))
         self._page_size_combo.currentIndexChanged.connect(self._on_page_size_changed)
 
         self._previous_button = AppButton("< Anterior")
@@ -252,51 +217,36 @@ class SteriflowDataPage(QWidget):
         self._date_from_checkbox.setChecked(False)
         self._date_to_checkbox.setChecked(False)
         self._needs_review_checkbox.setChecked(False)
-        self._on_filters_changed()
+        self._presenter.clear_filters()
+        self._refresh()
 
     def _on_filters_changed(self):
-        # Un filtro nuevo puede dejar la página actual fuera de rango (menos
-        # resultados que antes): se vuelve siempre a la primera página.
-        self._current_page = 0
-        self._reload_cycles()
+        self._presenter.set_product_query(self._product_filter_edit.text().strip())
+        self._presenter.set_date_range(
+            self._date_from_edit.date().toPython() if self._date_from_checkbox.isChecked() else None,
+            self._date_to_edit.date().toPython() if self._date_to_checkbox.isChecked() else None,
+        )
+        self._presenter.set_needs_review(self._needs_review_checkbox.isChecked())
+        self._refresh()
 
     def _on_page_size_changed(self):
-        self._page_size = self._page_size_combo.currentData()
-        self._current_page = 0
-        self._reload_cycles()
+        self._presenter.set_page_size(self._page_size_combo.currentData())
+        self._refresh()
 
     def _go_previous_page(self):
-        if self._current_page > 0:
-            self._current_page -= 1
-            self._reload_cycles()
+        if self._presenter.go_previous():
+            self._refresh()
 
     def _go_next_page(self):
-        if (self._current_page + 1) * self._page_size < self._total_count:
-            self._current_page += 1
-            self._reload_cycles()
+        if self._presenter.go_next():
+            self._refresh()
 
-    def _current_filters(self) -> CycleFilters:
-        return CycleFilters(
-            product_query=self._product_filter_edit.text().strip() or None,
-            date_from=self._date_from_edit.date().toPython() if self._date_from_checkbox.isChecked() else None,
-            date_to=self._date_to_edit.date().toPython() if self._date_to_checkbox.isChecked() else None,
-            needs_review=True if self._needs_review_checkbox.isChecked() else None,
-        )
-
-    def _reload_cycles(self):
-        page = cycle_page(
-            self._current_filters(),
-            page_index=self._current_page,
-            page_size=self._page_size,
-        )
-        self._total_count = page.total
-        cycles = page.cycles
-
-        self._row_cycles = cycles
+    def _refresh(self):
+        self._presenter.reload()
 
         table = self._cycles_table
         table.setRowCount(0)
-        for cycle in cycles:
+        for cycle in self._presenter.cycles():
             row = table.rowCount()
             table.insertRow(row)
             self._set_cycle_row(row, cycle)
@@ -304,47 +254,30 @@ class SteriflowDataPage(QWidget):
         self._update_pagination_controls()
 
     def _update_pagination_controls(self):
-        if self._total_count == 0:
-            self._pagination_label.setText("Sin ciclos")
-        else:
-            primero = self._current_page * self._page_size + 1
-            ultimo = min(primero + self._page_size - 1, self._total_count)
-            self._pagination_label.setText(f"Mostrando {primero}–{ultimo} de {self._total_count}")
-
-        self._previous_button.setEnabled(self._current_page > 0)
-        self._next_button.setEnabled((self._current_page + 1) * self._page_size < self._total_count)
+        self._pagination_label.setText(self._presenter.pagination_label())
+        self._previous_button.setEnabled(self._presenter.can_go_previous())
+        self._next_button.setEnabled(self._presenter.can_go_next())
 
     def _set_cycle_row(self, row, cycle):
         table = self._cycles_table
-
-        table.setItem(row, _COL_AUTOCLAVE, QTableWidgetItem(str(cycle.autoclave_code)))
-        table.setItem(row, _COL_STARTED_AT, QTableWidgetItem(cycle.started_at.strftime("%d/%m/%Y %H:%M:%S")))
-        table.setItem(row, _COL_PRODUCT, QTableWidgetItem(cycle.product))
-        table.setItem(row, _COL_BATCH, QTableWidgetItem(cycle.batch))
-        table.setItem(row, _COL_CYCLE_NUMBER, QTableWidgetItem(cycle.cycle_number))
-        table.setItem(row, _COL_DURATION, QTableWidgetItem(_format_duration(cycle.sterilization_duration_s)))
-        table.setItem(row, _COL_TEMP_MEAN, QTableWidgetItem(_format_temp(cycle.sterilization_temp_mean_c)))
-        table.setItem(row, _COL_TEMP_MIN, QTableWidgetItem(_format_temp(cycle.sterilization_temp_min_c)))
-        table.setItem(row, _COL_TEMP_MAX, QTableWidgetItem(_format_temp(cycle.sterilization_temp_max_c)))
-
-        review_item = QTableWidgetItem("Revisar" if cycle.needs_review else "")
-        if cycle.needs_review:
-            review_item.setToolTip(cycle.review_notes)
-        table.setItem(row, _COL_REVIEW, review_item)
+        for col, text in enumerate(self._presenter.row_cells(cycle)):
+            table.setItem(row, col, QTableWidgetItem(text))
 
         if cycle.needs_review:
+            table.item(row, _COL_REVIEW).setToolTip(cycle.review_notes)
             for col in range(table.columnCount()):
                 item = table.item(row, col)
                 item.setBackground(_REVIEW_BACKGROUND)
                 item.setForeground(_REVIEW_FOREGROUND)
 
-    def _selected_cycles(self) -> list[SterilizationCycle]:
-        filas = sorted({index.row() for index in self._cycles_table.selectionModel().selectedRows()})
-        return [self._row_cycles[fila] for fila in filas if fila < len(self._row_cycles)]
+    def _selected_cycles(self):
+        rows = sorted({index.row() for index in self._cycles_table.selectionModel().selectedRows()})
+        return self._presenter.cycles_at(rows)
 
     def _on_row_double_clicked(self, row, column):
-        if 0 <= row < len(self._row_cycles):
-            self._open_pdfs([self._row_cycles[row]])
+        cycle = self._presenter.cycle_at(row)
+        if cycle is not None:
+            self._open_pdfs([cycle])
 
     def _open_selected_pdfs(self):
         cycles = self._selected_cycles()
@@ -353,11 +286,10 @@ class SteriflowDataPage(QWidget):
             return
         self._open_pdfs(cycles)
 
-    def _open_pdfs(self, cycles: list[SterilizationCycle]):
-        settings = load_settings()
+    def _open_pdfs(self, cycles):
         fallos = []
         for cycle in cycles:
-            ruta = sterilization_service.find_pdf(settings, cycle.source_filename)
+            ruta = self._presenter.resolve_pdf(cycle)
             if ruta is None:
                 fallos.append((cycle.source_filename, OpenFailure.NOT_FOUND))
             elif not QDesktopServices.openUrl(QUrl.fromLocalFile(str(ruta))):
@@ -396,12 +328,12 @@ class SteriflowDataPage(QWidget):
 
         announce(logger, catalog.cycles_pdf_saved(len(cycles), destino))
 
-    def _print_job(self, cycles: list[SterilizationCycle]) -> printing.PrintJob:
+    def _print_job(self, cycles) -> printing.PrintJob:
         """La tabla de la selección, lista tanto para la impresora como para el PDF."""
         return printing.table_job(
             _PRINT_TITLE,
             _HEADERS,
-            [_print_row(cycle) for cycle in cycles],
+            [self._presenter.print_cells(cycle) for cycle in cycles],
             subtitle=f"{len(cycles)} ciclo(s)",
             # Los pendientes de revisión salen resaltados en papel igual que en pantalla.
             highlighted=[cycle.needs_review for cycle in cycles],
