@@ -5,10 +5,10 @@ from typing import Callable, Optional
 
 from PySide6.QtCore import QObject, Signal
 
-from src.modules.steriflow.logic.config import STERIFLOW_LOGS_ROOT
-from src.modules.steriflow.logic.controller import AGENT_LOG_FILENAME, SteriflowController
+from src.modules.steriflow.logic.controller import SteriflowController
+from src.modules.steriflow.logic.logs import agent_logger
 from src.shared.logs.logger import Logger
-from src.shared.messages.types import MessageType, Module
+from src.shared.messages.types import MessageType
 
 
 class BackupRunner(QObject):
@@ -39,39 +39,36 @@ class BackupRunner(QObject):
 
         Devuelve False si ya había una acción en curso (y no dispara otra).
         """
-        agent_logger = self._agent_logger()
+        logger = agent_logger()
 
         if not self._controller.try_start_run_now():
-            agent_logger.log(
+            logger.log(
                 f"Backup manual desde {source} ignorado: ya hay una acción en curso",
                 talk=MessageType.WARNING,
             )
             return False
 
         run_action = action or self._controller.backup_service.run
-        agent_logger.log(f"Backup manual iniciado desde {source}")
+        logger.log(f"Backup manual iniciado desde {source}")
         self.started.emit()
         threading.Thread(
-            target=self._worker, args=(agent_logger, run_action), daemon=True
+            target=self._worker, args=(logger, run_action), daemon=True
         ).start()
         return True
 
-    def _agent_logger(self) -> Logger:
-        return Logger(STERIFLOW_LOGS_ROOT / AGENT_LOG_FILENAME, Module.STERIFLOW)
-
-    def _worker(self, agent_logger: Logger, action: Callable[[], None]) -> None:
-        self._log_availability(agent_logger)
+    def _worker(self, logger: Logger, action: Callable[[], None]) -> None:
+        self._log_availability(logger)
         try:
             # El "terminado" lo dice la propia acción (ver BackupService), que
             # es la que sabe qué mitad del pipeline acaba de correr.
             action()
         except Exception as ex:
-            agent_logger.log(f"ERROR en backup manual: {ex}", talk=MessageType.ERROR)
+            logger.log(f"ERROR en backup manual: {ex}", talk=MessageType.ERROR)
         finally:
             self._controller.finish_run_now()
             self.finished.emit()
 
-    def _log_availability(self, agent_logger: Logger) -> None:
+    def _log_availability(self, logger: Logger) -> None:
         """Anota cómo estaban las máquinas al lanzar el backup: si luego no se
         copia nada, en el log queda si fue porque alguna no respondía o porque
         no había datos nuevos.
@@ -82,4 +79,4 @@ class BackupRunner(QObject):
         try:
             self._controller.log_availability("backup manual")
         except Exception as ex:
-            agent_logger.log(f"No se pudo comprobar la disponibilidad de las autoclaves: {ex}")
+            logger.log(f"No se pudo comprobar la disponibilidad de las autoclaves: {ex}")

@@ -8,31 +8,13 @@ from src.modules.steriflow.logic.backup import availability
 from src.modules.steriflow.logic.backup.scheduler import Scheduler
 from src.modules.steriflow.logic.backup.service import BackupService
 from src.modules.steriflow.logic.config import (
-    STERIFLOW_LOGS_ROOT,
     SteriflowSettings,
     ensure_config_file,
     load_settings,
     save_settings,
 )
+from src.modules.steriflow.logic.logs import BACKUP_LOG_PREFIX, STERIFLOW_LOGS_ROOT, agent_logger
 from src.shared.logs.history import last_backup_time
-from src.shared.logs.logger import Logger
-from src.shared.messages.types import Module
-
-AGENT_LOG_FILENAME = "steriflow_agent.log"
-BACKUP_LOG_PREFIX = "steriflow_backup_"
-
-
-"""
-añadimos un controlador de que las maquinas estan activas
-
-si no estan activas hacer un backup es una perdida de recursos
-si ademas de estar activas os arquivos no se han modificado desde el ultimo backup, no tiene sentido hacer un backup
-
-¿que mas condiciones?
-
-"""
-
-
 
 
 class SteriflowController:
@@ -126,10 +108,7 @@ class SteriflowController:
         Hace pings y lista carpetas de red, así que tarda: llamarla siempre
         desde un hilo de trabajo, nunca desde el de la interfaz.
         """
-        availability.log_availability(self.settings, self._new_agent_logger(), reason)
-
-    def _new_agent_logger(self) -> Logger:
-        return Logger(STERIFLOW_LOGS_ROOT / AGENT_LOG_FILENAME, Module.STERIFLOW)
+        availability.log_availability(self.settings, agent_logger(), reason)
 
     def _start_automation_locked(self) -> None:
         """Arranca las dos piezas del modo automático: el que hace los backups a
@@ -137,13 +116,13 @@ class SteriflowController:
         medias."""
         self._stop_automation_locked()
 
-        agent_logger = self._new_agent_logger()
+        logger = agent_logger()
         scheduler = Scheduler(
             self.settings.schedule.execution_hours,
             self.backup_service.run,
-            agent_logger,
+            logger,
         )
-        monitor = availability.AvailabilityMonitor(self.settings, agent_logger)
+        monitor = availability.AvailabilityMonitor(self.settings, logger)
 
         self._scheduler = scheduler
         self._availability = monitor

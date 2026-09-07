@@ -18,7 +18,7 @@ ASSETS_DIR = PROJECT_ROOT / "assets"
 DATA_DIR = PROJECT_ROOT / "data"
 # Logs que no son de ningún módulo (ver src/app/housekeeping.py); los de
 # cada módulo cuelgan de aquí también, en su propia subcarpeta (ver p. ej.
-# STERIFLOW_LOGS_ROOT en src/modules/steriflow/logic/config.py) -no son
+# STERIFLOW_LOGS_ROOT en src/modules/steriflow/logic/logs.py) -no son
 # configurables, igual que la base de datos no lo es-.
 LOGS_DIR = DATA_DIR / "logs"
 # Aquí y no en housekeeping.py: la pestaña de Configuración también escribe

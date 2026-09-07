@@ -10,9 +10,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.modules.steriflow.logic.config import STERIFLOW_LOGS_ROOT
-from src.modules.steriflow.logic.controller import AGENT_LOG_FILENAME, SteriflowController
-from src.shared.logs.logger import Logger
+from src.modules.steriflow.logic.controller import SteriflowController
+from src.modules.steriflow.logic.logs import STERIFLOW_LOGS_ROOT, agent_logger
 from src.modules.steriflow.logic.network import MachineStatus
 from src.shared.ui.components.app_button import (
     AppButton,
@@ -120,7 +119,7 @@ class SteriflowHomePage(QWidget):
     def _build_open_folders_group(self):
         group = QGroupBox("Abrir carpetas")
 
-        logger = self._agent_logger()
+        logger = agent_logger()
         paths = self._controller.settings.paths
 
         open_logs_button = AppFolderButton("Abrir logs", STERIFLOW_LOGS_ROOT, logger, create=True)
@@ -135,9 +134,6 @@ class SteriflowHomePage(QWidget):
 
         return group
 
-
-    def _agent_logger(self) -> Logger:
-        return Logger(STERIFLOW_LOGS_ROOT / AGENT_LOG_FILENAME, Module.STERIFLOW)
 
     def _on_check_clicked(self):
         autoclaves = [a for a in self._controller.settings.autoclaves if a.active]
@@ -191,7 +187,7 @@ class SteriflowHomePage(QWidget):
         # apagada y no haya rastro de cuándo se apagó es lo que convierte un
         # despiste en un agujero de trazabilidad.
         state = "activados" if checked else "desactivados"
-        self._agent_logger().log(
+        agent_logger().log(
             f"Backups automáticos {state} a mano desde la interfaz",
             talk=MessageType.INFO,
         )

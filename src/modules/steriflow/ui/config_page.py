@@ -22,19 +22,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.modules.steriflow.logic.controller import AGENT_LOG_FILENAME, SteriflowController
+from src.modules.steriflow.logic.controller import SteriflowController
 from src.modules.steriflow.logic.config import (
-    STERIFLOW_LOGS_ROOT,
     AutoclaveConfig,
     ScheduleConfig,
     SteriflowPaths,
     SteriflowSettings,
     save_settings,
 )
+from src.modules.steriflow.logic.logs import agent_logger
 from src.modules.steriflow.logic.network import MachineStatus
 from src.shared.assets.resources import MATERIA_GREEN_IMAGE, MATERIA_RED_IMAGE, MATERIA_YELLOW_IMAGE
-from src.shared.logs.logger import Logger
-from src.shared.messages.types import MessageType, Module
+from src.shared.messages.types import MessageType
 from src.shared.ui.components.app_button import AppButton
 from src.modules.steriflow.ui.status_checker import AutoclaveStatusChecker
 
@@ -442,7 +441,7 @@ class SteriflowConfigPage(QWidget):
         # este aviso no hay forma de saber que el cambio ha entrado. Y la línea
         # de log es la que explica meses después por qué el backup dejó de
         # copiar: alguien cambió una ruta tal día.
-        Logger(STERIFLOW_LOGS_ROOT / AGENT_LOG_FILENAME, Module.STERIFLOW).log(
+        agent_logger().log(
             "Configuración de Steriflow guardada", talk=MessageType.SUCCESS
         )
 

@@ -10,16 +10,9 @@ from pathlib import Path
 
 from src.shared.config.manager import ensure_config_file as _ensure_config_file
 from src.shared.config.manager import load_config, save_config
-from src.shared.paths import LOGS_DIR, resolve_path
+from src.shared.paths import resolve_path
 
 _MODULE = "steriflow"
-
-# Antes venía de steriflowConfig.yaml (`logs_root`), editable desde la
-# pestaña de Configuración. Se fija aquí -igual que DB_PATH en
-# src/shared/db/connection.py- porque el log es lo que explica qué pasó tras
-# un fallo: no debe poder quedar apuntando a una ruta que el usuario cambió o
-# borró sin querer.
-STERIFLOW_LOGS_ROOT = LOGS_DIR / "steriflow"
 
 
 def _default_path_folder(name: str) -> str:

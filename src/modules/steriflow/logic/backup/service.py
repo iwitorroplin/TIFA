@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 
 from src.shared.db.connection import connect
 from src.modules.steriflow.logic.backup.reports import new_reports
 from src.modules.steriflow.logic.backup.robocopy import run_robocopy
-from src.modules.steriflow.logic.config import STERIFLOW_LOGS_ROOT, AutoclaveConfig, SteriflowSettings
+from src.modules.steriflow.logic.config import AutoclaveConfig, SteriflowSettings
+from src.modules.steriflow.logic.logs import new_backup_logger
 from src.shared.logs.logger import Logger
-from src.shared.messages.types import MessageType, Module
+from src.shared.messages.types import MessageType
 from src.modules.steriflow.logic.network import is_reachable
 from src.modules.steriflow.logic.sterilization import service as sterilization_service
-
-_LOG_TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
 
 # robocopy: 0-7 es exito (incluye "sin cambios"), 8+ es fallo. Ver robocopy /?.
 _ROBOCOPY_FAILURE_CODE = 8
@@ -73,9 +71,7 @@ class BackupService:
             logger.log(done_message, talk=MessageType.SUCCESS)
 
     def _new_logger(self) -> Logger:
-        timestamp = datetime.now().strftime(_LOG_TIMESTAMP_FORMAT)
-        log_file = STERIFLOW_LOGS_ROOT / f"steriflow_backup_{timestamp}.log"
-        return Logger(log_file, Module.STERIFLOW)
+        return new_backup_logger()
 
     def _fetch_all(self, logger: Logger) -> int:
         """Devuelve cuántas autoclaves fallaron (ver `_announce_end`)."""

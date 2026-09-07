@@ -14,8 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.modules.steriflow.logic.config import STERIFLOW_LOGS_ROOT
-from src.modules.steriflow.logic.controller import BACKUP_LOG_PREFIX
+from src.modules.steriflow.logic.logs import BACKUP_LOG_PREFIX, STERIFLOW_LOGS_ROOT
 from src.shared.logs.files import LogTailer
 from src.shared.logs.history import list_backup_logs
 
