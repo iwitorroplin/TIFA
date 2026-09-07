@@ -1,5 +1,3 @@
-from datetime import time
-
 from PySide6.QtCore import QTime, QTimer, Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
@@ -21,17 +19,12 @@ from PySide6.QtWidgets import (
 )
 
 from src.modules.steriflow.logic.controller import SteriflowController
-from src.modules.steriflow.logic.config import AutoclaveConfig, SteriflowSettings
+from src.modules.steriflow.logic.config import AutoclaveConfig
 from src.modules.steriflow.logic.logs import agent_logger
 from src.modules.steriflow.logic.network import MachineStatus
-from src.modules.steriflow.logic.settings_editor import (
-    SaveStatus,
-    SettingsDraft,
-    SettingsIssue,
-    apply as apply_settings,
-    validate_autoclave,
-)
+from src.modules.steriflow.logic.settings_editor import SaveStatus, SettingsIssue, validate_autoclave
 from src.modules.steriflow.messages import catalog
+from src.modules.steriflow.ui.config_presenter import SteriflowConfigPresenter
 from src.shared.assets.resources import MATERIA_GREEN_IMAGE, MATERIA_RED_IMAGE, MATERIA_YELLOW_IMAGE
 from src.shared.messages.notice import announce
 from src.shared.ui import notices
@@ -66,7 +59,7 @@ class SteriflowConfigPage(QWidget):
     def __init__(self, controller: SteriflowController):
         super().__init__()
 
-        self._controller = controller
+        self._presenter = SteriflowConfigPresenter(controller)
 
         self._status_checker = AutoclaveStatusChecker(self)
         self._status_checker.checked.connect(self._on_status_checked)
@@ -81,7 +74,8 @@ class SteriflowConfigPage(QWidget):
         layout.addWidget(self._build_schedules_group())
         layout.addStretch()
 
-        self._load_from_settings(controller.settings)
+        self._repaint()
+        self._refresh_statuses()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -95,28 +89,28 @@ class SteriflowConfigPage(QWidget):
         group = QGroupBox("Rutas")
 
         self._local_root_edit = QLineEdit()
-        self._local_root_edit.editingFinished.connect(self._persist)
+        self._local_root_edit.editingFinished.connect(self._on_local_root_edited)
 
         self._server_root_edit = QLineEdit()
-        self._server_root_edit.editingFinished.connect(self._persist)
+        self._server_root_edit.editingFinished.connect(self._on_server_root_edited)
 
         group_layout = QFormLayout(group)
         group_layout.addRow(
             "Carpeta raíz local:",
-            self._build_path_row(self._local_root_edit),
+            self._build_path_row(self._local_root_edit, self._on_local_root_edited),
         )
         group_layout.addRow(
             "Carpeta raíz de servidor:",
-            self._build_path_row(self._server_root_edit),
+            self._build_path_row(self._server_root_edit, self._on_server_root_edited),
         )
 
         return group
 
-    def _build_path_row(self, line_edit):
+    def _build_path_row(self, line_edit, on_change):
         row = QWidget()
 
         browse_button = AppButton("Seleccionar...")
-        browse_button.clicked.connect(lambda: self._select_path(line_edit))
+        browse_button.clicked.connect(lambda: self._select_path(line_edit, on_change))
 
         row_layout = QHBoxLayout(row)
         row_layout.setContentsMargins(0, 0, 0, 0)
@@ -125,11 +119,19 @@ class SteriflowConfigPage(QWidget):
 
         return row
 
-    def _select_path(self, line_edit):
+    def _select_path(self, line_edit, on_change):
         path = QFileDialog.getExistingDirectory(self, "Seleccionar carpeta", line_edit.text())
         if path:
             line_edit.setText(path)
-            self._persist()
+            on_change()
+
+    def _on_local_root_edited(self):
+        self._presenter.set_local_root(self._local_root_edit.text().strip())
+        self._persist()
+
+    def _on_server_root_edited(self):
+        self._presenter.set_server_root(self._server_root_edit.text().strip())
+        self._persist()
 
     def _build_autoclaves_group(self):
         group = QGroupBox("Autoclaves")
@@ -179,24 +181,13 @@ class SteriflowConfigPage(QWidget):
     def _add_autoclave_row(self):
         dialog = _AutoclaveDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            name, ip, path_folder, local_folder, backup_folder, active = dialog.values()
-            row = self._autoclaves_table.rowCount()
-            self._autoclaves_table.insertRow(row)
-            self._set_autoclave_row(
-                row,
-                name=name,
-                ip=ip,
-                path_folder=path_folder,
-                local_folder=local_folder,
-                backup_folder=backup_folder,
-                active=active,
-            )
+            self._presenter.add_autoclave(_autoclave_from_dialog(dialog))
             self._persist()
 
     def _remove_selected_autoclave_row(self):
         row = self._autoclaves_table.currentRow()
         if row >= 0:
-            self._autoclaves_table.removeRow(row)
+            self._presenter.remove_autoclave(row)
             self._persist()
 
     def _edit_selected_autoclave_row(self):
@@ -204,61 +195,19 @@ class SteriflowConfigPage(QWidget):
         if row < 0:
             return
 
-        name = self._autoclaves_table.item(row, _COL_NAME).text()
-        ip = self._autoclaves_table.item(row, _COL_IP).text()
-        path_folder = self._autoclaves_table.item(row, _COL_PATH).text()
-        local_folder = self._autoclaves_table.item(row, _COL_LOCAL).text()
-        backup_folder = self._autoclaves_table.item(row, _COL_BACKUP).text()
-        active = self._autoclaves_table.item(row, _COL_ACTIVE).checkState() == Qt.CheckState.Checked
-
+        autoclave = self._presenter.autoclaves()[row]
         dialog = _AutoclaveDialog(
             self,
-            name=name,
-            ip=ip,
-            path_folder=path_folder,
-            local_folder=local_folder,
-            backup_folder=backup_folder,
-            active=active,
+            name=autoclave.name,
+            ip=autoclave.ip,
+            path_folder=autoclave.path_folder,
+            local_folder=autoclave.local_folder,
+            backup_folder=autoclave.backup_folder,
+            active=autoclave.active,
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            name, ip, path_folder, local_folder, backup_folder, active = dialog.values()
-            self._set_autoclave_row(
-                row,
-                name=name,
-                ip=ip,
-                path_folder=path_folder,
-                local_folder=local_folder,
-                backup_folder=backup_folder,
-                active=active,
-            )
+            self._presenter.update_autoclave(row, _autoclave_from_dialog(dialog))
             self._persist()
-
-    def _set_autoclave_row(self, row, *, name, ip, path_folder, local_folder, backup_folder, active):
-        self._autoclaves_table.setItem(row, _COL_NAME, QTableWidgetItem(name))
-        self._autoclaves_table.setItem(row, _COL_IP, QTableWidgetItem(ip))
-
-        path_item = QTableWidgetItem(path_folder)
-        path_item.setToolTip(path_folder)
-        self._autoclaves_table.setItem(row, _COL_PATH, path_item)
-
-        local_item = QTableWidgetItem(local_folder)
-        local_item.setToolTip(local_folder)
-        self._autoclaves_table.setItem(row, _COL_LOCAL, local_item)
-
-        backup_item = QTableWidgetItem(backup_folder)
-        backup_item.setToolTip(backup_folder)
-        self._autoclaves_table.setItem(row, _COL_BACKUP, backup_item)
-
-        active_item = QTableWidgetItem()
-        active_item.setFlags(active_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-        active_item.setCheckState(Qt.CheckState.Checked if active else Qt.CheckState.Unchecked)
-        self._autoclaves_table.setItem(row, _COL_ACTIVE, active_item)
-
-        # El nombre/IP puede haber cambiado: el estado de red anterior ya no
-        # es de fiar, se resetea aquí y se recalcula en segundo plano.
-        status_item = QTableWidgetItem("Comprobando…")
-        status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-        self._autoclaves_table.setItem(row, _COL_STATUS, status_item)
 
     def _build_schedules_group(self):
         group = QGroupBox("Horarios")
@@ -297,9 +246,7 @@ class SteriflowConfigPage(QWidget):
     def _add_schedule_row(self):
         dialog = _ScheduleDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            row = self._schedules_table.rowCount()
-            self._schedules_table.insertRow(row)
-            self._set_schedule_row(row, dialog.value())
+            self._presenter.add_hour(dialog.value().toPython())
             self._persist()
 
     def _remove_selected_schedule_row(self):
@@ -307,11 +254,11 @@ class SteriflowConfigPage(QWidget):
         if row < 0:
             return
 
-        if self._schedules_table.rowCount() <= 1:
+        if not self._presenter.can_remove_hour():
             notices.show(self, catalog.settings_issue(SettingsIssue.AT_LEAST_ONE_SCHEDULE))
             return
 
-        self._schedules_table.removeRow(row)
+        self._presenter.remove_hour(row)
         self._persist()
 
     def _edit_selected_schedule_row(self):
@@ -319,67 +266,101 @@ class SteriflowConfigPage(QWidget):
         if row < 0:
             return
 
-        time_value = QTime.fromString(self._schedules_table.item(row, 0).text(), "HH:mm")
-
-        dialog = _ScheduleDialog(self, time=time_value)
+        hour = self._presenter.hours()[row]
+        dialog = _ScheduleDialog(self, time=QTime(hour.hour, hour.minute))
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._set_schedule_row(row, dialog.value())
+            self._presenter.update_hour(row, dialog.value().toPython())
             self._persist()
 
-    def _set_schedule_row(self, row, time):
-        time_item = QTableWidgetItem(time.toString("HH:mm"))
+    def _repaint(self):
+        """Repinta todo desde el presenter, nunca al revés: así la tabla
+        nunca puede desincronizarse de lo que hay realmente en el borrador
+        (ver el riesgo de índices desalineados en el histórico del refactor).
+        Única excepción: la celda de estado de red, que llega por señal
+        (`_on_status_checked`) y se actualiza sola, sin repintar la tabla
+        entera en cada ping."""
+        self._local_root_edit.setText(self._presenter.local_root())
+        self._server_root_edit.setText(self._presenter.server_root())
+        self._repaint_autoclaves_table()
+        self._repaint_schedules_table()
+
+    def _repaint_autoclaves_table(self):
+        table = self._autoclaves_table
+        current_row = table.currentRow()
+
+        table.setRowCount(0)
+        for autoclave in self._presenter.autoclaves():
+            row = table.rowCount()
+            table.insertRow(row)
+            self._set_autoclave_row(row, autoclave)
+
+        if 0 <= current_row < table.rowCount():
+            table.selectRow(current_row)
+
+    def _set_autoclave_row(self, row, autoclave: AutoclaveConfig):
+        table = self._autoclaves_table
+        table.setItem(row, _COL_NAME, QTableWidgetItem(autoclave.name))
+        table.setItem(row, _COL_IP, QTableWidgetItem(autoclave.ip))
+
+        path_item = QTableWidgetItem(autoclave.path_folder)
+        path_item.setToolTip(autoclave.path_folder)
+        table.setItem(row, _COL_PATH, path_item)
+
+        local_item = QTableWidgetItem(autoclave.local_folder)
+        local_item.setToolTip(autoclave.local_folder)
+        table.setItem(row, _COL_LOCAL, local_item)
+
+        backup_item = QTableWidgetItem(autoclave.backup_folder)
+        backup_item.setToolTip(autoclave.backup_folder)
+        table.setItem(row, _COL_BACKUP, backup_item)
+
+        active_item = QTableWidgetItem()
+        active_item.setFlags(active_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        active_item.setCheckState(Qt.CheckState.Checked if autoclave.active else Qt.CheckState.Unchecked)
+        table.setItem(row, _COL_ACTIVE, active_item)
+
+        self._set_status_cell(row, autoclave.name)
+
+    def _set_status_cell(self, row, name):
+        status = self._presenter.status_of(name)
+        if status is None:
+            status_item = QTableWidgetItem("Comprobando…")
+        else:
+            status_item = QTableWidgetItem(
+                QIcon(str(_STATUS_ICONS[status])), catalog.machine_status_label(status)
+            )
+        status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self._autoclaves_table.setItem(row, _COL_STATUS, status_item)
+
+    def _repaint_schedules_table(self):
+        table = self._schedules_table
+        current_row = table.currentRow()
+
+        table.setRowCount(0)
+        for hour in self._presenter.hours():
+            row = table.rowCount()
+            table.insertRow(row)
+            self._set_schedule_row(row, QTime(hour.hour, hour.minute))
+
+        if 0 <= current_row < table.rowCount():
+            table.selectRow(current_row)
+
+    def _set_schedule_row(self, row, qtime):
+        time_item = QTableWidgetItem(qtime.toString("HH:mm"))
         time_item.setFlags(time_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         self._schedules_table.setItem(row, 0, time_item)
 
-    def _load_from_settings(self, settings: SteriflowSettings):
-        self._local_root_edit.setText(str(settings.paths.local_root))
-        self._server_root_edit.setText(str(settings.paths.server_root))
-
-        self._autoclaves_table.setRowCount(0)
-        for autoclave in settings.autoclaves:
-            row = self._autoclaves_table.rowCount()
-            self._autoclaves_table.insertRow(row)
-            self._set_autoclave_row(
-                row,
-                name=autoclave.name,
-                ip=autoclave.ip,
-                path_folder=autoclave.path_folder,
-                local_folder=autoclave.local_folder,
-                backup_folder=autoclave.backup_folder,
-                active=autoclave.active,
-            )
-
-        self._schedules_table.setRowCount(0)
-        for hour in settings.schedule.execution_hours:
-            row = self._schedules_table.rowCount()
-            self._schedules_table.insertRow(row)
-            self._set_schedule_row(row, QTime(hour.hour, hour.minute))
-
-        self._refresh_statuses()
-
     def _refresh_statuses(self):
         """Lanza un ping por autoclave en segundo plano (ver
-        _AutoclaveStatusChecker): con timeout de 2 s por máquina, hacerlo en el
+        AutoclaveStatusChecker): con timeout de 2 s por máquina, hacerlo en el
         hilo de la interfaz congelaría la pestaña varios segundos."""
-        rows = [
-            (
-                self._autoclaves_table.item(row, _COL_NAME).text(),
-                self._autoclaves_table.item(row, _COL_IP).text(),
-            )
-            for row in range(self._autoclaves_table.rowCount())
-        ]
-        self._status_checker.check(rows)
+        self._status_checker.check(self._presenter.status_targets())
 
     def _on_status_checked(self, name, status: MachineStatus):
+        self._presenter.set_status(name, status)
         row = self._find_autoclave_row(name)
-        if row is None:
-            return
-
-        icon = _STATUS_ICONS[status]
-        text = catalog.machine_status_label(status)
-        status_item = QTableWidgetItem(QIcon(str(icon)), text)
-        status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-        self._autoclaves_table.setItem(row, _COL_STATUS, status_item)
+        if row is not None:
+            self._set_status_cell(row, name)
 
     def _find_autoclave_row(self, name):
         for row in range(self._autoclaves_table.rowCount()):
@@ -388,51 +369,34 @@ class SteriflowConfigPage(QWidget):
         return None
 
     def _persist(self):
-        """Guarda de inmediato el estado actual de la página: cada acción puntual
+        """Guarda de inmediato el estado actual del borrador: cada acción puntual
         (elegir una carpeta, aceptar el diálogo de autoclave/horario, quitar una
         fila) ya deja la configuración guardada — no hay un botón "Guardar" aparte."""
-        autoclaves = [
-            AutoclaveConfig(
-                name=self._autoclaves_table.item(row, _COL_NAME).text(),
-                ip=self._autoclaves_table.item(row, _COL_IP).text(),
-                path_folder=self._autoclaves_table.item(row, _COL_PATH).text().strip(),
-                local_folder=self._autoclaves_table.item(row, _COL_LOCAL).text().strip(),
-                backup_folder=self._autoclaves_table.item(row, _COL_BACKUP).text().strip(),
-                active=self._autoclaves_table.item(row, _COL_ACTIVE).checkState() == Qt.CheckState.Checked,
-            )
-            for row in range(self._autoclaves_table.rowCount())
-        ]
-        execution_hours = [
-            time.fromisoformat(self._schedules_table.item(row, 0).text())
-            for row in range(self._schedules_table.rowCount())
-        ]
-
-        draft = SettingsDraft(
-            local_root_text=self._local_root_edit.text().strip(),
-            server_root_text=self._server_root_edit.text().strip(),
-            autoclaves=autoclaves,
-            execution_hours=execution_hours,
-        )
-
-        # apply() valida, compara con lo ya guardado (dirty-check: sin él,
-        # pasear por la página guardaría, reiniciaría el scheduler y sacaría
-        # un "guardada" cada dos clics con `editingFinished`) y persiste si
-        # hace falta.
-        outcome = apply_settings(self._controller, draft)
+        outcome = self._presenter.save()
+        self._repaint()
 
         if outcome.status is SaveStatus.INVALID:
             notices.show(self, catalog.settings_issue(outcome.issue))
             return
-        if outcome.status is SaveStatus.UNCHANGED:
-            return
+        if outcome.status is SaveStatus.SAVED:
+            self._refresh_statuses()
+            # Esta página no tiene botón "Guardar" -se persiste sola-, así que sin
+            # este aviso no hay forma de saber que el cambio ha entrado. Y la línea
+            # de log es la que explica meses después por qué el backup dejó de
+            # copiar: alguien cambió una ruta tal día.
+            announce(agent_logger(), catalog.settings_saved())
 
-        self._load_from_settings(self._controller.settings)
 
-        # Esta página no tiene botón "Guardar" -se persiste sola-, así que sin
-        # este aviso no hay forma de saber que el cambio ha entrado. Y la línea
-        # de log es la que explica meses después por qué el backup dejó de
-        # copiar: alguien cambió una ruta tal día.
-        announce(agent_logger(), catalog.settings_saved())
+def _autoclave_from_dialog(dialog: "_AutoclaveDialog") -> AutoclaveConfig:
+    name, ip, path_folder, local_folder, backup_folder, active = dialog.values()
+    return AutoclaveConfig(
+        name=name,
+        ip=ip,
+        path_folder=path_folder,
+        local_folder=local_folder,
+        backup_folder=backup_folder,
+        active=active,
+    )
 
 
 class _AutoclaveDialog(QDialog):
@@ -510,15 +474,7 @@ class _AutoclaveDialog(QDialog):
             line_edit.setText(path)
 
     def accept(self):
-        name, ip, path_folder, local_folder, backup_folder, active = self.values()
-        autoclave = AutoclaveConfig(
-            name=name,
-            ip=ip,
-            path_folder=path_folder,
-            local_folder=local_folder,
-            backup_folder=backup_folder,
-            active=active,
-        )
+        autoclave = _autoclave_from_dialog(self)
         issue = validate_autoclave(autoclave)
         if issue is not None:
             notices.show(self, catalog.autoclave_issue(issue))
