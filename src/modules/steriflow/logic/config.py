@@ -10,9 +10,16 @@ from pathlib import Path
 
 from src.shared.config.manager import ensure_config_file as _ensure_config_file
 from src.shared.config.manager import load_config, save_config
-from src.shared.paths import resolve_path
+from src.shared.paths import LOGS_DIR, resolve_path
 
 _MODULE = "steriflow"
+
+# Antes venía de steriflowConfig.yaml (`logs_root`), editable desde la
+# pestaña de Configuración. Se fija aquí -igual que DB_PATH en
+# src/shared/db/connection.py- porque el log es lo que explica qué pasó tras
+# un fallo: no debe poder quedar apuntando a una ruta que el usuario cambió o
+# borró sin querer.
+STERIFLOW_LOGS_ROOT = LOGS_DIR / "steriflow"
 
 
 def _default_path_folder(name: str) -> str:
@@ -74,7 +81,6 @@ class AutoclaveConfig:
 
 @dataclass(frozen=True)
 class SteriflowPaths:
-    logs_root: Path
     # local_root/server_root: carpetas raíz donde, por convención, vive la
     # subcarpeta de cada autoclave (local_root/<nombre>, server_root/<nombre>).
     # Cada autoclave puede apuntar su local_folder/backup_folder a otro sitio,
@@ -94,6 +100,10 @@ class SteriflowSettings:
     paths: SteriflowPaths
     autoclaves: list[AutoclaveConfig]
     schedule: ScheduleConfig
+    # Si el modo automático debe arrancar solo al abrir la app. Se guarda
+    # aquí -y no solo en memoria en el controller- para que apagarlo desde la
+    # home page sobreviva a un reinicio (ver SteriflowController.set_auto_enabled).
+    auto_enabled: bool
 
 
 def ensure_config_file() -> bool:
@@ -108,7 +118,6 @@ def load_settings() -> SteriflowSettings:
 
     return SteriflowSettings(
         paths=SteriflowPaths(
-            logs_root=resolve_path(raw["logs_root"]),
             local_root=local_root,
             server_root=server_root,
         ),
@@ -130,17 +139,18 @@ def load_settings() -> SteriflowSettings:
                 time.fromisoformat(hour) for hour in raw["execution_hours"]
             )
         ),
+        auto_enabled=bool(raw.get("auto_enabled", False)),
     )
 
 
 def save_settings(settings: SteriflowSettings) -> None:
     save_config(_MODULE, {
-        "logs_root": str(settings.paths.logs_root),
         "local_root": str(settings.paths.local_root),
         "server_root": str(settings.paths.server_root),
         "execution_hours": [
             hour.strftime("%H:%M") for hour in settings.schedule.execution_hours
         ],
+        "auto_enabled": settings.auto_enabled,
         "autoclaves": [
             {
                 "name": a.name,

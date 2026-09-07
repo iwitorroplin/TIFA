@@ -6,7 +6,7 @@ from pathlib import Path
 from src.shared.db.connection import connect
 from src.modules.steriflow.logic.backup.reports import new_reports
 from src.modules.steriflow.logic.backup.robocopy import run_robocopy
-from src.modules.steriflow.logic.config import AutoclaveConfig, SteriflowSettings
+from src.modules.steriflow.logic.config import STERIFLOW_LOGS_ROOT, AutoclaveConfig, SteriflowSettings
 from src.shared.logs.logger import Logger
 from src.shared.messages.types import MessageType, Module
 from src.modules.steriflow.logic.network import is_reachable
@@ -74,7 +74,7 @@ class BackupService:
 
     def _new_logger(self) -> Logger:
         timestamp = datetime.now().strftime(_LOG_TIMESTAMP_FORMAT)
-        log_file = self._settings.paths.logs_root / f"steriflow_backup_{timestamp}.log"
+        log_file = STERIFLOW_LOGS_ROOT / f"steriflow_backup_{timestamp}.log"
         return Logger(log_file, Module.STERIFLOW)
 
     def _fetch_all(self, logger: Logger) -> int:

@@ -36,11 +36,10 @@ class ModuleSpec:
 
 
 def _steriflow_log_path() -> Path:
-    from src.modules.steriflow.logic.config import ensure_config_file, load_settings
+    from src.modules.steriflow.logic.config import STERIFLOW_LOGS_ROOT
     from src.modules.steriflow.logic.controller import AGENT_LOG_FILENAME
 
-    ensure_config_file()
-    return load_settings().paths.logs_root / AGENT_LOG_FILENAME
+    return STERIFLOW_LOGS_ROOT / AGENT_LOG_FILENAME
 
 
 def _build_modules() -> list[ModuleSpec]:

@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import dataclasses
 import threading
 from datetime import datetime
 
 from src.modules.steriflow.logic.backup import availability
 from src.modules.steriflow.logic.backup.scheduler import Scheduler
 from src.modules.steriflow.logic.backup.service import BackupService
-from src.modules.steriflow.logic.config import SteriflowSettings, ensure_config_file, load_settings
+from src.modules.steriflow.logic.config import (
+    STERIFLOW_LOGS_ROOT,
+    SteriflowSettings,
+    ensure_config_file,
+    load_settings,
+    save_settings,
+)
 from src.shared.logs.history import last_backup_time
 from src.shared.logs.logger import Logger
 from src.shared.messages.types import Module
@@ -38,7 +45,10 @@ class SteriflowController:
         self._lock = threading.Lock()
         self._scheduler: Scheduler | None = None
         self._availability: availability.AvailabilityMonitor | None = None
-        self._auto_enabled = False
+        # Punto de partida: lo que se guardó la última vez que el usuario tocó
+        # el checkbox de la home page (ver set_auto_enabled). start()/stop() lo
+        # actualizan mientras corre la app.
+        self._auto_enabled = settings.auto_enabled
         self._run_now_lock = threading.Lock()
         self._run_now_in_progress = False
 
@@ -61,7 +71,7 @@ class SteriflowController:
     @property
     def last_backup(self) -> datetime | None:
         """Cuándo terminó el último backup, deducido de los logs en disco."""
-        return last_backup_time(self.settings.paths.logs_root, BACKUP_LOG_PREFIX)
+        return last_backup_time(STERIFLOW_LOGS_ROOT, BACKUP_LOG_PREFIX)
 
     @property
     def next_execution(self) -> datetime | None:
@@ -97,6 +107,18 @@ class SteriflowController:
             self._stop_automation_locked()
             self._auto_enabled = False
 
+    def set_auto_enabled(self, enabled: bool) -> None:
+        """Arranca o para el modo automático a petición del usuario (checkbox
+        de la home page) y deja la elección guardada en disco, para que
+        sobreviva a un reinicio de la app en vez de reactivarse solo."""
+        if enabled:
+            self.start()
+        else:
+            self.stop()
+
+        self.settings = dataclasses.replace(self.settings, auto_enabled=enabled)
+        save_settings(self.settings)
+
     def log_availability(self, reason: str) -> None:
         """Deja constancia en el log del agente de si las autoclaves responden y
         de si tienen datos nuevos.
@@ -107,7 +129,7 @@ class SteriflowController:
         availability.log_availability(self.settings, self._new_agent_logger(), reason)
 
     def _new_agent_logger(self) -> Logger:
-        return Logger(self.settings.paths.logs_root / AGENT_LOG_FILENAME, Module.STERIFLOW)
+        return Logger(STERIFLOW_LOGS_ROOT / AGENT_LOG_FILENAME, Module.STERIFLOW)
 
     def _start_automation_locked(self) -> None:
         """Arranca las dos piezas del modo automático: el que hace los backups a

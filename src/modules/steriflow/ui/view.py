@@ -13,14 +13,18 @@ class SteriflowView(QWidget):
         super().__init__()
 
         self._controller = build_default_controller()
-        self._controller.start()
+        # Arranca el scheduler solo si el usuario no lo había parado a mano la
+        # última vez (ver SteriflowController.set_auto_enabled): si no,
+        # apagarlo desde la home page duraría hasta el siguiente reinicio.
+        if self._controller.auto_enabled:
+            self._controller.start()
 
         self._tabs = SteriflowTabBar()
         self._pages = QStackedWidget()
         self._pages.addWidget(SteriflowHomePage(self._controller))
         self._pages.addWidget(SteriflowConfigPage(self._controller))
         self._pages.addWidget(SteriflowDataPage())
-        self._pages.addWidget(SteriflowLogsPage(self._controller))
+        self._pages.addWidget(SteriflowLogsPage())
 
         self._tabs.currentChanged.connect(self._pages.setCurrentIndex)
 

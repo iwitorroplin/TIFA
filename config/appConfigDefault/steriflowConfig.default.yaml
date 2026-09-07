@@ -1,7 +1,6 @@
 # Ruta relativa a la carpeta del propio programa (se resuelve contra ella
 # mientras no sea absoluta). Es solo el punto de partida del primer arranque:
 # se edita desde la pestaña de Configuración con las rutas reales.
-logs_root: "data/steriflow/logs"
 local_root: "data/steriflow/local"
 server_root: "data/steriflow/server"
 execution_hours: [
@@ -11,6 +10,8 @@ execution_hours: [
   "16:00",
   "20:00"
   ]
+
+auto_enabled: false
 
 autoclaves:
   - name: AUTOCLAVE6

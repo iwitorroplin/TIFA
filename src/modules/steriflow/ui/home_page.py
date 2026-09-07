@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from src.modules.steriflow.logic.config import STERIFLOW_LOGS_ROOT
 from src.modules.steriflow.logic.controller import AGENT_LOG_FILENAME, SteriflowController
 from src.shared.logs.logger import Logger
 from src.modules.steriflow.logic.network import MachineStatus
@@ -24,6 +25,7 @@ from src.shared.messages.manager import manager
 from src.shared.messages.types import MessageType, Module
 from src.modules.steriflow.ui.backup_runner import BackupRunner
 from src.modules.steriflow.ui.status_checker import AutoclaveStatusChecker
+from src.shared.ui.components.loading_overlay import LoadingOverlay
 
 
 
@@ -51,10 +53,15 @@ class SteriflowHomePage(QWidget):
         self._status_timer.timeout.connect(self._refresh_status_labels)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(self._build_backup_status_group())
+        layout.addWidget(self._build_automation_status_group())
         layout.addWidget(self._build_backup_actions_group())
         layout.addWidget(self._build_open_folders_group())
         layout.addStretch()
+
+        # Cubre toda la página mientras corre una acción (check/import/export):
+        # bloquea los clics del resto sin tener que deshabilitar cada botón a
+        # mano, y evita el parpadeo si la acción termina casi al instante.
+        self._loading_overlay = LoadingOverlay(self)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -65,8 +72,9 @@ class SteriflowHomePage(QWidget):
         super().hideEvent(event)
         self._status_timer.stop()
 
-    def _build_backup_status_group(self):
-        group = QGroupBox("Estado del Backup")
+
+    def _build_automation_status_group(self):
+        group = QGroupBox("Estado de la automatización")
 
         self._last_backup_label = QLabel()
         self._next_backup_label = QLabel()
@@ -88,19 +96,23 @@ class SteriflowHomePage(QWidget):
     def _build_backup_actions_group(self):
         group = QGroupBox("Acciones de Backup")
 
-        self._check_button = AppButton("Comprobar conexión")
+        self._check_button = AppStartButton("check")
+        self._check_button.setToolTip ("Comprueba la conexion de las maquinas")
         self._check_button.clicked.connect(self._on_check_clicked)
 
-        self._fetch_button = AppStartButton("Importar (máquinas a local)")
+        self._fetch_button = AppStartButton("Import")
+        self._fetch_button.setToolTip("Importa los datos (.pdf) de las maquinas a local")
         self._fetch_button.clicked.connect(self._on_fetch_clicked)
 
-        self._run_button = AppStartButton("Exportar (local a servidor)")
-        self._run_button.clicked.connect(self._on_run_clicked)
+
+        self._backup_button = AppStartButton("Export")
+        self._backup_button.setToolTip("Exporta los datos (.pdf) de las maquinas a local")
+        self._backup_button.clicked.connect(self._on_backup_clicked)
 
         group_layout = QHBoxLayout(group)
         group_layout.addWidget(self._check_button)
         group_layout.addWidget(self._fetch_button)
-        group_layout.addWidget(self._run_button)
+        group_layout.addWidget(self._backup_button)
         group_layout.addStretch()
 
         return group
@@ -111,7 +123,7 @@ class SteriflowHomePage(QWidget):
         logger = self._agent_logger()
         paths = self._controller.settings.paths
 
-        open_logs_button = AppFolderButton("Abrir logs", paths.logs_root, logger, create=True)
+        open_logs_button = AppFolderButton("Abrir logs", STERIFLOW_LOGS_ROOT, logger, create=True)
         open_local_button = AppFolderButton("Abrir Local", paths.local_root, logger, create=True)
         open_server_button = AppFolderButton("Abrir Servidor", paths.server_root, logger, create=False)
 
@@ -123,12 +135,9 @@ class SteriflowHomePage(QWidget):
 
         return group
 
+
     def _agent_logger(self) -> Logger:
-        """Nuevo en cada uso, no guardado: la carpeta de logs puede cambiar en
-        la pestaña de configuración mientras la app sigue abierta."""
-        return Logger(
-            self._controller.settings.paths.logs_root / AGENT_LOG_FILENAME, Module.STERIFLOW
-        )
+        return Logger(STERIFLOW_LOGS_ROOT / AGENT_LOG_FILENAME, Module.STERIFLOW)
 
     def _on_check_clicked(self):
         autoclaves = [a for a in self._controller.settings.autoclaves if a.active]
@@ -136,7 +145,7 @@ class SteriflowHomePage(QWidget):
             manager.push(Module.STERIFLOW, MessageType.WARNING, "No hay autoclaves activas configuradas.")
             return
 
-        self._check_button.setEnabled(False)
+        self._loading_overlay.start("Comprobando conexión...")
         self._pending_connectivity_checks = {autoclave.name: None for autoclave in autoclaves}
         self._connectivity_checker.check([(a.name, a.ip) for a in autoclaves])
 
@@ -147,7 +156,7 @@ class SteriflowHomePage(QWidget):
         if any(value is None for value in self._pending_connectivity_checks.values()):
             return
 
-        self._check_button.setEnabled(True)
+        self._loading_overlay.finish()
         results = self._pending_connectivity_checks
         all_online = all(value is MachineStatus.ONLINE for value in results.values())
 
@@ -156,9 +165,13 @@ class SteriflowHomePage(QWidget):
             if autoclave_status is MachineStatus.ONLINE:
                 lines.append(f"{autoclave_name}: OK")
             elif autoclave_status is MachineStatus.OFFLINE:
-                lines.append(f"{autoclave_name}: no ok (apagada o desconectada)")
+                lines.append(f"{autoclave_name}: No OK: Apagada")
             else:
-                lines.append(f"{autoclave_name}: no ok (fallo de conexión)")
+                # CONNECTION_ERROR: ni eco ni "inaccesible" (ver
+                # network.check_machine_status) -es lo que se ve en la
+                # práctica cuando la máquina está realmente apagada, así que
+                # sin esta rama la mayoría de los casos no sacaban texto.
+                lines.append(f"{autoclave_name}: No OK: Fallo de conexión")
 
         # Respuesta directa a un clic, no un paso de un proceso: no queda
         # nada que consultar luego en el log, se dice y ya está.
@@ -168,32 +181,27 @@ class SteriflowHomePage(QWidget):
     def _on_fetch_clicked(self):
         self._backup_runner.run(source="home_page", action=self._controller.backup_service.fetch)
 
-    def _on_run_clicked(self):
+    def _on_backup_clicked(self):
         self._backup_runner.run(source="home_page", action=self._controller.backup_service.backup)
 
     def _on_auto_mode_toggled(self, checked):
-        if checked:
-            self._controller.start()
-        else:
-            self._controller.stop()
+        self._controller.set_auto_enabled(checked)
 
         # Al log además de decirlo: que la automatización lleve dos semanas
         # apagada y no haya rastro de cuándo se apagó es lo que convierte un
         # despiste en un agujero de trazabilidad.
-        estado = "activados" if checked else "desactivados"
+        state = "activados" if checked else "desactivados"
         self._agent_logger().log(
-            f"Backups automáticos {estado} a mano desde la interfaz",
+            f"Backups automáticos {state} a mano desde la interfaz",
             talk=MessageType.INFO,
         )
         self._refresh_status_labels()
 
     def _on_backup_started(self):
-        self._fetch_button.setEnabled(False)
-        self._run_button.setEnabled(False)
+        self._loading_overlay.start()
 
     def _on_backup_finished(self):
-        self._fetch_button.setEnabled(True)
-        self._run_button.setEnabled(True)
+        self._loading_overlay.finish()
         self._refresh_status_labels()
 
     def _refresh_status_labels(self):

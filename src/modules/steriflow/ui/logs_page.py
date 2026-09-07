@@ -14,7 +14,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.modules.steriflow.logic.controller import BACKUP_LOG_PREFIX, SteriflowController
+from src.modules.steriflow.logic.config import STERIFLOW_LOGS_ROOT
+from src.modules.steriflow.logic.controller import BACKUP_LOG_PREFIX
 from src.shared.logs.files import LogTailer
 from src.shared.logs.history import list_backup_logs
 
@@ -28,10 +29,9 @@ class SteriflowLogsPage(QWidget):
     global de Logs del navbar, no aquí. Con varias ejecuciones al día, la tabla
     es lo que escala; un combo con decenas de entradas no."""
 
-    def __init__(self, controller: SteriflowController):
+    def __init__(self):
         super().__init__()
 
-        self._controller = controller
         self._tailer = None
         self._current_path = None
         self._rows: list[tuple] = []  # (datetime, Path) por fila, más reciente primero
@@ -79,7 +79,7 @@ class SteriflowLogsPage(QWidget):
         self._timer.stop()
 
     def _logs_directory(self):
-        return self._controller.settings.paths.logs_root
+        return STERIFLOW_LOGS_ROOT
 
     def _refresh_table(self, select_latest: bool):
         self._rows = list_backup_logs(self._logs_directory(), BACKUP_LOG_PREFIX)

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from src.modules.steriflow.logic.controller import AGENT_LOG_FILENAME, SteriflowController
 from src.modules.steriflow.logic.config import (
+    STERIFLOW_LOGS_ROOT,
     AutoclaveConfig,
     ScheduleConfig,
     SteriflowPaths,
@@ -84,9 +85,6 @@ class SteriflowConfigPage(QWidget):
     def _build_paths_group(self):
         group = QGroupBox("Rutas")
 
-        self._logs_path_edit = QLineEdit()
-        self._logs_path_edit.editingFinished.connect(self._persist)
-
         self._local_root_edit = QLineEdit()
         self._local_root_edit.editingFinished.connect(self._persist)
 
@@ -94,10 +92,6 @@ class SteriflowConfigPage(QWidget):
         self._server_root_edit.editingFinished.connect(self._persist)
 
         group_layout = QFormLayout(group)
-        group_layout.addRow(
-            "Carpeta de logs:",
-            self._build_path_row(self._logs_path_edit),
-        )
         group_layout.addRow(
             "Carpeta raíz local:",
             self._build_path_row(self._local_root_edit),
@@ -329,7 +323,6 @@ class SteriflowConfigPage(QWidget):
         self._schedules_table.setItem(row, 0, time_item)
 
     def _load_from_settings(self, settings: SteriflowSettings):
-        self._logs_path_edit.setText(str(settings.paths.logs_root))
         self._local_root_edit.setText(str(settings.paths.local_root))
         self._server_root_edit.setText(str(settings.paths.server_root))
 
@@ -392,11 +385,6 @@ class SteriflowConfigPage(QWidget):
         """Guarda de inmediato el estado actual de la página: cada acción puntual
         (elegir una carpeta, aceptar el diálogo de autoclave/horario, quitar una
         fila) ya deja la configuración guardada — no hay un botón "Guardar" aparte."""
-        logs_text = self._logs_path_edit.text().strip()
-        if not logs_text:
-            QMessageBox.warning(self, "Backup", "La carpeta de logs es obligatoria.")
-            return
-
         local_root_text = self._local_root_edit.text().strip()
         if not local_root_text:
             QMessageBox.warning(self, "Backup", "La carpeta raíz local es obligatoria.")
@@ -430,12 +418,14 @@ class SteriflowConfigPage(QWidget):
 
         settings = SteriflowSettings(
             paths=SteriflowPaths(
-                logs_root=Path(logs_text),
                 local_root=Path(local_root_text),
                 server_root=Path(server_root_text),
             ),
             autoclaves=autoclaves,
             schedule=ScheduleConfig(execution_hours=execution_hours),
+            # Esta página no edita el modo automático (eso es cosa del
+            # checkbox de la home page): se conserva tal cual estaba.
+            auto_enabled=self._controller.settings.auto_enabled,
         )
 
         # `editingFinished` salta cada vez que un campo pierde el foco, haya
@@ -452,7 +442,7 @@ class SteriflowConfigPage(QWidget):
         # este aviso no hay forma de saber que el cambio ha entrado. Y la línea
         # de log es la que explica meses después por qué el backup dejó de
         # copiar: alguien cambió una ruta tal día.
-        Logger(settings.paths.logs_root / AGENT_LOG_FILENAME, Module.STERIFLOW).log(
+        Logger(STERIFLOW_LOGS_ROOT / AGENT_LOG_FILENAME, Module.STERIFLOW).log(
             "Configuración de Steriflow guardada", talk=MessageType.SUCCESS
         )
 

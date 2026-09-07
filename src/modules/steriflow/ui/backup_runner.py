@@ -5,6 +5,7 @@ from typing import Callable, Optional
 
 from PySide6.QtCore import QObject, Signal
 
+from src.modules.steriflow.logic.config import STERIFLOW_LOGS_ROOT
 from src.modules.steriflow.logic.controller import AGENT_LOG_FILENAME, SteriflowController
 from src.shared.logs.logger import Logger
 from src.shared.messages.types import MessageType, Module
@@ -56,10 +57,7 @@ class BackupRunner(QObject):
         return True
 
     def _agent_logger(self) -> Logger:
-        return Logger(
-            self._controller.settings.paths.logs_root / AGENT_LOG_FILENAME,
-            Module.STERIFLOW,
-        )
+        return Logger(STERIFLOW_LOGS_ROOT / AGENT_LOG_FILENAME, Module.STERIFLOW)
 
     def _worker(self, agent_logger: Logger, action: Callable[[], None]) -> None:
         self._log_availability(agent_logger)

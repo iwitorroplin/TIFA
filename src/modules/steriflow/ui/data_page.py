@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.shared.db.connection import connect
-from src.modules.steriflow.logic.config import load_settings
+from src.modules.steriflow.logic.config import STERIFLOW_LOGS_ROOT, load_settings
 from src.modules.steriflow.logic.controller import AGENT_LOG_FILENAME
 from src.shared.logs.logger import Logger
 from src.shared.messages.types import MessageType, Module
@@ -392,7 +392,7 @@ class SteriflowDataPage(QWidget):
         # Un PDF exportado es un documento que sale de la aplicación: interesa
         # que quede en el log cuándo se generó y dónde, no solo avisar en el
         # momento.
-        logger = Logger(load_settings().paths.logs_root / AGENT_LOG_FILENAME, Module.STERIFLOW)
+        logger = Logger(STERIFLOW_LOGS_ROOT / AGENT_LOG_FILENAME, Module.STERIFLOW)
         try:
             self._print_job(cycles).export_pdf(destino)
         except OSError as ex:
