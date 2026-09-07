@@ -35,7 +35,7 @@ from src.modules.steriflow.logic.network import MachineStatus
 from src.shared.assets.resources import MATERIA_GREEN_IMAGE, MATERIA_RED_IMAGE, MATERIA_YELLOW_IMAGE
 from src.shared.messages.types import MessageType
 from src.shared.ui.components.app_button import AppButton
-from src.modules.steriflow.ui.status_checker import AutoclaveStatusChecker
+from src.modules.steriflow.tasks.status_checker import AutoclaveStatusChecker
 
 # Índices de columna de la tabla de autoclaves. Explícitos porque "Activo" es
 # un checkbox: leerlo de la columna equivocada (p. ej. tras insertar una

@@ -22,8 +22,8 @@ from src.shared.ui.components.app_button import (
 from src.shared.ui.formatting import format_moment
 from src.shared.messages.manager import manager
 from src.shared.messages.types import MessageType, Module
-from src.modules.steriflow.ui.backup_runner import BackupRunner
-from src.modules.steriflow.ui.status_checker import AutoclaveStatusChecker
+from src.modules.steriflow.tasks.backup_runner import BackupRunner
+from src.modules.steriflow.tasks.status_checker import AutoclaveStatusChecker
 from src.shared.ui.components.loading_overlay import LoadingOverlay
 
 
