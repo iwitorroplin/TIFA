@@ -26,8 +26,8 @@ from src.modules.steriflow.logic.settings_editor import SaveStatus, SettingsIssu
 from src.modules.steriflow.messages import catalog
 from src.modules.steriflow.ui.config_presenter import SteriflowConfigPresenter
 from src.shared.assets.resources import MATERIA_GREEN_IMAGE, MATERIA_RED_IMAGE, MATERIA_YELLOW_IMAGE
-from src.shared.messages.notice import announce
-from src.shared.ui import notices
+from src.shared.messages.notice import announce, push
+from src.shared.messages.types import Module
 from src.shared.ui.components.app_button import AppButton
 from src.modules.steriflow.tasks.status_checker import AutoclaveStatusChecker
 
@@ -255,7 +255,7 @@ class SteriflowConfigPage(QWidget):
             return
 
         if not self._presenter.can_remove_hour():
-            notices.show(self, catalog.settings_issue(SettingsIssue.AT_LEAST_ONE_SCHEDULE))
+            push(Module.STERIFLOW, catalog.settings_issue(SettingsIssue.AT_LEAST_ONE_SCHEDULE))
             return
 
         self._presenter.remove_hour(row)
@@ -376,7 +376,7 @@ class SteriflowConfigPage(QWidget):
         self._repaint()
 
         if outcome.status is SaveStatus.INVALID:
-            notices.show(self, catalog.settings_issue(outcome.issue))
+            push(Module.STERIFLOW, catalog.settings_issue(outcome.issue))
             return
         if outcome.status is SaveStatus.SAVED:
             self._refresh_statuses()
@@ -477,7 +477,7 @@ class _AutoclaveDialog(QDialog):
         autoclave = _autoclave_from_dialog(self)
         issue = validate_autoclave(autoclave)
         if issue is not None:
-            notices.show(self, catalog.autoclave_issue(issue))
+            push(Module.STERIFLOW, catalog.autoclave_issue(issue))
             return
         super().accept()
 

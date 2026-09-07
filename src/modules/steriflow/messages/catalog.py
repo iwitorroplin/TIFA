@@ -1,4 +1,5 @@
-"""Catálogo de avisos de Steriflow: cada función redacta el texto y decide
+"""
+Catálogo de avisos de Steriflow: cada función redacta el texto y decide
 la severidad de un evento del módulo, sin decidir por qué canal sale -eso es
 cosa de quien la llama (`src.shared.messages.notice.announce`/`push` para el
 bus, `src.shared.ui.notices.show` para un diálogo síncrono). Así el mismo
@@ -77,7 +78,7 @@ _SETTINGS_ISSUE_TEXTS = {
 
 
 def settings_issue(issue: SettingsIssue) -> Notice:
-    return Notice(MessageType.WARNING, _SETTINGS_ISSUE_TEXTS[issue], title="Backup")
+    return Notice(MessageType.WARNING, _SETTINGS_ISSUE_TEXTS[issue])
 
 
 _AUTOCLAVE_ISSUE_TEXTS = {
@@ -88,7 +89,7 @@ _AUTOCLAVE_ISSUE_TEXTS = {
 
 
 def autoclave_issue(issue: AutoclaveIssue) -> Notice:
-    return Notice(MessageType.WARNING, _AUTOCLAVE_ISSUE_TEXTS[issue], title="Autoclave")
+    return Notice(MessageType.WARNING, _AUTOCLAVE_ISSUE_TEXTS[issue])
 
 
 # --- Conectividad y estado de red (ui/home_page.py, ui/config_page.py) ---

@@ -34,7 +34,7 @@ class HomeView(QWidget):
         label_welcome = QLabel(f"Bienvenido a {app_settings.name}")
         label_welcome.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label_welcome.setStyleSheet(
-            "font-size: 24px; font-weight: bold; color: white; text-shadow: 1px 1px 2px black;"
+            "font-size: 24px; font-weight: bold; color: white;"
         )
         layout.addWidget(label_welcome)
 
@@ -42,7 +42,7 @@ class HomeView(QWidget):
         label_description = QLabel(f"{app_settings.description} · v{app_settings.version}")
         label_description.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label_description.setStyleSheet(
-            "font-size: 14px; color: white; text-shadow: 1px 1px 2px black;"
+            "font-size: 20px; font-weight: bold; color: white;"
         )
         layout.addWidget(label_description)
 
