@@ -1,6 +1,7 @@
 from src.shared.assets.paths import (
     BACKGROUND_DIR,
     CHARACTERS_DIR,
+    DIAGRAMS_DIR,
     ICONS_DIR,
     IMAGES_DIR,
     MATERIAS_DIR,
@@ -43,6 +44,13 @@ MATERIA_STOP_IMAGE = MATERIAS_DIR / "materia_stop.svg"
 
 # OTHER
 FOLDER_IMAGE = OTHERS_DIR / "folder.svg"
+SAVE_IMAGE = OTHERS_DIR / "save.svg"
+DELETE_IMAGE = OTHERS_DIR / "delete.svg"
+MODIFY_IMAGE = OTHERS_DIR / "modify.svg"
+ADD_IMAGE = OTHERS_DIR / "add.svg"
+
+# DIAGRAMAS
+FERLO_VARIABLES_DIAGRAM = DIAGRAMS_DIR / "ferlo_variables.svg"
 
 # BACKGROUND
 # .png y no .svg: el original vectorizado tardaba segundos en rasterizarse

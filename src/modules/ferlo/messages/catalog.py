@@ -59,6 +59,10 @@ def config_saved() -> Notice:
     return Notice(MessageType.SUCCESS, "Configuración de Ferlo guardada")
 
 
+def config_unchanged() -> Notice:
+    return Notice(MessageType.INFO, "No hay cambios que guardar en la configuración de Ferlo")
+
+
 def config_out_of_range(warnings: list[str]) -> Notice:
     return Notice(MessageType.WARNING, "Guardado con valores fuera de rango:\n" + "\n".join(warnings))
 

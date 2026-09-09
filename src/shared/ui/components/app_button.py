@@ -3,9 +3,13 @@ from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import QPushButton, QToolButton
 
 from src.shared.assets.resources import (
+    ADD_IMAGE,
+    DELETE_IMAGE,
     FOLDER_IMAGE,
     MATERIA_STARTER_IMAGE,
-    MATERIA_STOP_IMAGE
+    MATERIA_STOP_IMAGE,
+    MODIFY_IMAGE,
+    SAVE_IMAGE,
 )
 
 from src.shared.messages.types import MessageType
@@ -109,4 +113,36 @@ class AppStopButton(_AppIconButton):
     _icon_path = MATERIA_STOP_IMAGE
 
     def __init__(self, text, color="#e20c0c"):
+        super().__init__(text, color)
+
+
+class AppSaveButton(_AppIconButton):
+    # boton de guardado, para persistir cambios acumulados en un borrador
+    _icon_path = SAVE_IMAGE
+
+    def __init__(self, text="Guardar", color="#3fa34d"):
+        super().__init__(text, color)
+
+
+class AppDeleteButton(_AppIconButton):
+    # boton de eliminar, mismo rojo que AppStopButton por convencion de la app
+    _icon_path = DELETE_IMAGE
+
+    def __init__(self, text="Eliminar", color="#e20c0c"):
+        super().__init__(text, color)
+
+
+class AppModifyButton(_AppIconButton):
+    # boton de modificar/editar un elemento existente
+    _icon_path = MODIFY_IMAGE
+
+    def __init__(self, text="Modificar", color="#4d88cb"):
+        super().__init__(text, color)
+
+
+class AppAddButton(_AppIconButton):
+    # boton de anadir un elemento nuevo
+    _icon_path = ADD_IMAGE
+
+    def __init__(self, text="Añadir", color="#4d88cb"):
         super().__init__(text, color)

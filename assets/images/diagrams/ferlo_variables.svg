@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 660" width="900" height="660" role="img" aria-label="Diagrama de las variables de Configuracion de Ferlo: arriba, la curva de un ciclo de esterilizacion con el umbral de ciclo, la consigna estimada por moda de la meseta, la banda de tolerancia, el antirrebote de salida y la ventana de estabilizacion; abajo, cuatro paneles que explican el muestreo, los criterios de validez del ciclo, la resolucion y el suelo usados para estimar la consigna, y las tolerancias de aceptacion y revision.">
+<defs>
+<marker id="ah" viewBox="0 0 8 6" refX="7" refY="3" markerWidth="7" markerHeight="5" orient="auto"><polygon class="dg-head" points="0,0 8,3 0,6"></polygon></marker>
+<style>
+      .dg-axis{stroke:#C0C8D0;stroke-width:1;fill:none}
+      .dg-guide{stroke:#C0C8D0;stroke-width:1;stroke-dasharray:3 3;fill:none}
+      .dg-curve{stroke:#B44A1E;stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}
+      .dg-curve-thin{stroke:#B44A1E;stroke-width:1.4;fill:none;stroke-linejoin:round;stroke-linecap:round}
+      .dg-curve-off{stroke:#9AA3AB;stroke-width:1.4;fill:none;stroke-linejoin:round;stroke-linecap:round;stroke-dasharray:3 2}
+      .dg-band{stroke:#B44A1E;stroke-width:1;stroke-dasharray:4 3;fill:none}
+      .dg-set{stroke:#7C8892;stroke-width:1;fill:none}
+      .dg-fill{fill:#B44A1E;opacity:.16}
+      .dg-win{stroke:#7C8892;stroke-width:1;stroke-dasharray:2 2;fill:none}
+      .dg-label{fill:#525E69;font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:11px}
+      .dg-small{fill:#7C8892;font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:10px}
+      .dg-strong{fill:#111820;font-family:"Chivo","Helvetica Neue",Arial,sans-serif;font-size:12px;font-weight:600}
+      .dg-sec{fill:#8C3915;font-family:"Chivo","Helvetica Neue",Arial,sans-serif;font-size:11px;font-weight:600;letter-spacing:.05em}
+      .dg-frame{fill:#E3E7EB;stroke:#C0C8D0;stroke-width:1}
+      .dg-box{fill:#FFFFFF;stroke:#C0C8D0;stroke-width:1}
+      .dg-arrow{stroke:#7C8892;stroke-width:1.2;fill:none}
+      .dg-head{fill:#7C8892}
+      .dg-phase{fill:#C0C8D0}
+      .dg-phase-a{fill:#B44A1E;opacity:.8}
+      .dg-stab{fill:#8C3915;opacity:.35}
+    </style>
+</defs>
+<rect x="0" y="0" width="900" height="660" fill="#FFFFFF"></rect>
+<g><line class="dg-axis" x1="60" y1="40" x2="60" y2="320"></line>
+<line class="dg-axis" x1="60" y1="320" x2="540" y2="320"></line>
+<text class="dg-small" x="56" y="46" text-anchor="end">°C</text>
+<text class="dg-small" x="56" y="265" text-anchor="end">50</text>
+<text class="dg-small" x="56" y="67" text-anchor="end">117</text>
+<text class="dg-small" x="536" y="334" text-anchor="end">min</text>
+<line class="dg-guide" x1="60" y1="261" x2="540" y2="261"></line>
+<text class="dg-label" x="160" y="255">umbral de ciclo (inicio y fin) · 50 °C</text>
+<line class="dg-guide" x1="101.8" y1="261" x2="101.8" y2="150"></line>
+<line class="dg-guide" x1="135.2" y1="65" x2="135.2" y2="326"></line>
+<line class="dg-guide" x1="448.7" y1="64" x2="448.7" y2="326"></line>
+<line class="dg-guide" x1="494.7" y1="264" x2="494.7" y2="326"></line>
+<polyline class="dg-curve" points="60,320 68.4,314.1 80.9,275.8 93.4,225.7 101.8,187.4 110.2,149.1 118.5,113.7 126.9,84.2 131.1,72.4 135.2,65 139.4,56.2 143.6,51 149.9,51.8 156.1,56.2 164.5,61.2 172.9,63 185.4,63.3 227.2,63 269,63.6 285.7,63.9 289.9,65.7 292,66.3 294.1,65.4 296.2,64.2 310.8,63.3 352.6,63 394.4,63.6 436.2,63.3 448.7,63.9 452.9,69.5 457.1,84.2 461.3,104.9 469.6,149.1 478,196.2 486.4,237.5 494.7,264 507.3,278.7 519.8,287.6"></polyline>
+<line class="dg-arrow" x1="166" y1="38" x2="147" y2="48" marker-end="url(#ah)"></line>
+<text class="dg-label" x="170" y="40">sobreimpulso 121,3 °C · 4 min</text>
+<line class="dg-arrow" x1="210" y1="86" x2="210" y2="66" marker-end="url(#ah)"></line>
+<text class="dg-label" x="210" y="99" text-anchor="middle">meseta por moda: 117 °C</text>
+<text class="dg-small" x="210" y="112" text-anchor="middle">844 muestras aquí, 4 en el pico</text>
+<rect class="dg-stab" x="135.2" y="330" width="41.8" height="6"></rect>
+<line class="dg-guide" x1="135.2" y1="330" x2="135.2" y2="235"></line>
+<line class="dg-guide" x1="177.0" y1="330" x2="177.0" y2="235"></line>
+<text class="dg-label" x="156.1" y="222" text-anchor="middle">ventana de estabilización · 10 min</text>
+<rect class="dg-phase" x="101.8" y="330" width="33.4" height="6"></rect>
+<rect class="dg-phase-a" x="135.2" y="330" width="313.5" height="6"></rect>
+<rect class="dg-phase" x="448.7" y="330" width="46" height="6"></rect>
+<text class="dg-small" x="118" y="352" text-anchor="middle">rampa</text>
+<text class="dg-label" x="292" y="352" text-anchor="middle">esterilización · 75 min</text>
+<text class="dg-small" x="471" y="352" text-anchor="middle">enfriam.</text>
+<rect class="dg-win" x="248.1" y="48.9" width="62.7" height="19.1"></rect>
+<line class="dg-guide" x1="310.8" y1="48.9" x2="575" y2="55"></line>
+<line class="dg-guide" x1="310.8" y1="68" x2="575" y2="305"></line>
+<rect class="dg-frame" x="575" y="55" width="310" height="250"></rect>
+<text class="dg-strong" x="585" y="74">Meseta, minutos 45–60</text>
+<line class="dg-set" x1="580" y1="244.6" x2="880" y2="244.6"></line>
+<text class="dg-small" x="876" y="240" text-anchor="end">consigna 117,0 °C</text>
+<line class="dg-band" x1="580" y1="263.1" x2="880" y2="263.1"></line>
+<text class="dg-label" x="584" y="259">banda = consigna − 0,50 °C</text>
+<rect class="dg-fill" x="770" y="263.1" width="15" height="36.9"></rect>
+<rect class="dg-win" x="770" y="263.1" width="20" height="36.9"></rect>
+<polyline class="dg-curve" points="580,240.9 680,244.6 740,240.9 760,251.9 770,263.1 775,274.2 780,277.9 785,263.1 790,251.9 800,244.6 880,240.9"></polyline>
+<line class="dg-arrow" x1="712" y1="288" x2="766" y2="283" marker-end="url(#ah)"></line>
+<text class="dg-small" x="585" y="285">bajada de 45 s</text>
+<text class="dg-small" x="585" y="298">&lt; antirrebote de salida (60 s)</text>
+<text class="dg-label" x="795" y="291">no cierra la fase</text></g>
+<line x1="20" y1="392" x2="880" y2="392" stroke="#D8DDE2" stroke-width="1"></line>
+<text class="dg-sec" x="20" y="412">MUESTREO, VALIDEZ, CONSIGNA Y ACEPTACIÓN</text>
+<g><rect class="dg-box" x="20" y="430" width="205" height="220" rx="3"></rect>
+<text class="dg-strong" x="32" y="452">Muestreo</text>
+<text class="dg-small" x="32" y="466">nominal_sample_interval_s</text>
+<line class="dg-axis" x1="35" y1="540" x2="210" y2="540"></line>
+<line class="dg-set" x1="35.0" y1="534" x2="35.0" y2="546"></line>
+<line class="dg-set" x1="70.0" y1="534" x2="70.0" y2="546"></line>
+<line class="dg-set" x1="105.0" y1="534" x2="105.0" y2="546"></line>
+<line class="dg-set" x1="140.0" y1="534" x2="140.0" y2="546"></line>
+<line class="dg-set" x1="175.0" y1="534" x2="175.0" y2="546"></line>
+<line class="dg-set" x1="210.0" y1="534" x2="210.0" y2="546"></line>
+<text class="dg-label" x="122.5" y="566" text-anchor="middle">cada 5 s, por defecto</text>
+<text class="dg-small" x="122.5" y="582" text-anchor="middle">(1–300 s configurable)</text>
+<text class="dg-small" x="122.5" y="630" text-anchor="middle">marca el hueco esperado</text>
+<text class="dg-small" x="122.5" y="642" text-anchor="middle">entre lecturas consecutivas</text></g>
+<g><rect class="dg-box" x="237" y="430" width="205" height="220" rx="3"></rect>
+<text class="dg-strong" x="249" y="452">Validez del ciclo</text>
+<text class="dg-small" x="249" y="466">min_cycle_duration_min</text>
+<text class="dg-small" x="249" y="478">min_cycle_peak_temperature_c</text>
+<line class="dg-guide" x1="249" y1="500" x2="430" y2="500"></line>
+<text class="dg-label" x="252" y="496">pico mínimo · 60 °C</text>
+<polyline class="dg-curve-thin" points="257,585 292,486 322,484 352,486 372,585"></polyline>
+<line class="dg-set" x1="257" y1="599" x2="372" y2="599"></line>
+<line class="dg-set" x1="257" y1="595" x2="257" y2="603"></line>
+<line class="dg-set" x1="372" y1="595" x2="372" y2="603"></line>
+<text class="dg-small" x="314.5" y="615" text-anchor="middle">≥ duración mínima</text>
+<polyline class="dg-curve-off" points="397,585 415,522 433,585"></polyline>
+<text class="dg-small" x="415.0" y="615" text-anchor="middle">descartado</text>
+<line class="dg-axis" x1="249" y1="585" x2="430" y2="585"></line>
+<text class="dg-small" x="339.5" y="630" text-anchor="middle">si no llega a ambos,</text>
+<text class="dg-small" x="339.5" y="642" text-anchor="middle">se descarta como ruido</text></g>
+<g><rect class="dg-box" x="454" y="430" width="205" height="220" rx="3"></rect>
+<text class="dg-strong" x="466" y="452">Consigna por moda</text>
+<text class="dg-small" x="466" y="466">setpoint_mode_bin_c</text>
+<text class="dg-small" x="466" y="478">setpoint_mode_floor_c</text>
+<polyline class="dg-curve-thin" points="469,518 489,510 514,515 539,508 564,514 589,509 644,516"></polyline>
+<line class="dg-guide" x1="469.0" y1="498" x2="469.0" y2="526"></line>
+<line class="dg-guide" x1="488.4" y1="498" x2="488.4" y2="526"></line>
+<line class="dg-guide" x1="507.9" y1="498" x2="507.9" y2="526"></line>
+<line class="dg-guide" x1="527.3" y1="498" x2="527.3" y2="526"></line>
+<line class="dg-band" x1="546.8" y1="498" x2="546.8" y2="526"></line>
+<line class="dg-guide" x1="566.2" y1="498" x2="566.2" y2="526"></line>
+<line class="dg-guide" x1="585.7" y1="498" x2="585.7" y2="526"></line>
+<line class="dg-guide" x1="605.1" y1="498" x2="605.1" y2="526"></line>
+<line class="dg-guide" x1="624.6" y1="498" x2="624.6" y2="526"></line>
+<line class="dg-guide" x1="644.0" y1="498" x2="644.0" y2="526"></line>
+<text class="dg-label" x="556.5" y="492" text-anchor="middle">bin = resolución de la moda</text>
+<line class="dg-guide" x1="469" y1="570" x2="644" y2="570"></line>
+<text class="dg-label" x="556.5" y="586" text-anchor="middle">suelo de la meseta</text>
+<text class="dg-small" x="556.5" y="600" text-anchor="middle">por debajo: rampa/enfriam.</text>
+<text class="dg-small" x="556.5" y="642" text-anchor="middle">moda solo cuenta ≥ suelo</text></g>
+<g><rect class="dg-box" x="671" y="430" width="205" height="220" rx="3"></rect>
+<text class="dg-strong" x="683" y="452">Aceptación y revisión</text>
+<text class="dg-small" x="683" y="466">acceptance_tolerance_c</text>
+<text class="dg-small" x="683" y="478">acceptance_time_tolerance_min</text>
+<text class="dg-small" x="683" y="490">review_deviation_c</text>
+<line class="dg-axis" x1="731" y1="516" x2="731" y2="606"></line>
+<text class="dg-small" x="737" y="512">consigna</text>
+<line class="dg-band" x1="719" y1="550" x2="743" y2="550"></line>
+<text class="dg-small" x="749" y="553">banda esteriliz.</text>
+<line class="dg-guide" x1="719" y1="572" x2="743" y2="572"></line>
+<text class="dg-small" x="749" y="575">toler. aceptación</text>
+<line class="dg-guide" x1="719" y1="594" x2="743" y2="594"></line>
+<text class="dg-small" x="749" y="597">desv. a revisar</text>
+<text class="dg-small" x="683" y="620">tolerancia de tiempo:</text>
+<text class="dg-small" x="683" y="632">cuánto puede faltar de</text>
+<text class="dg-small" x="683" y="644">duración y seguir conforme</text></g>
+</svg>

@@ -34,6 +34,7 @@ from src.modules.ferlo.logic.controller import FerloController
 from src.modules.ferlo.messages import catalog
 from src.shared.messages.notice import push
 from src.shared.messages.types import Module
+from src.shared.ui.components.app_button import AppSaveButton
 
 _SEVERITY_COLORS = {"info": "#4d88cb", "review": "#c98a00", "error": "#e20c0c"}
 
@@ -214,7 +215,7 @@ class FerloDetailDialog(QDialog):
         self._notes_edit.setPlaceholderText("Notas de revisión (opcional)...")
         self._notes_edit.setFixedHeight(70)
 
-        save_button = QPushButton("Guardar revisión")
+        save_button = AppSaveButton("Guardar revisión")
         save_button.clicked.connect(self._on_save_review_clicked)
 
         row = QHBoxLayout()

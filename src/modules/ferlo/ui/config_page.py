@@ -13,6 +13,7 @@ que portar (ver `logic/analysis/programs.py`), así que se gestiona a mano.
 
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -21,10 +22,12 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QLineEdit,
+    QSizePolicy,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -40,7 +43,10 @@ from src.modules.ferlo.messages import catalog
 from src.shared.messages.notice import announce, push
 from src.shared.messages.types import Module
 from src.shared.paths import PROJECT_ROOT
-from src.shared.ui.components.app_button import AppButton
+from src.shared.ui.components.app_button import AppAddButton, AppButton, AppSaveButton
+from src.shared.ui.components.diagram_viewer_dialog import DiagramViewerDialog
+
+_SECTIONS_PER_ROW = 3
 
 _COL_CODE = 0
 _COL_NAME = 1
@@ -56,17 +62,38 @@ class FerloConfigPage(QWidget):
         self._controller = controller
         self._draft = controller.settings.as_dict()
         self._spinboxes: dict[tuple[str, str], QWidget] = {}
+        self._dirty = False
+        self._diagram_dialog: DiagramViewerDialog | None = None
 
         layout = QVBoxLayout(self)
+        layout.addLayout(self._build_top_bar())
         layout.addWidget(self._build_paths_group())
-        for section in SETTINGS_SCHEMA:
-            layout.addWidget(self._build_section_group(section))
+        layout.addLayout(self._build_sections_grid())
         layout.addWidget(self._build_programs_group())
         layout.addStretch()
+        layout.addLayout(self._build_save_bar())
 
     def showEvent(self, event):
         super().showEvent(event)
         self._repaint_programs_table()
+
+    # --- barra superior: ventana con el diagrama que explica las variables ---
+
+    def _build_top_bar(self):
+        diagram_button = AppButton("Ver diagrama de variables")
+        diagram_button.clicked.connect(self._on_show_diagram)
+
+        row = QHBoxLayout()
+        row.addStretch()
+        row.addWidget(diagram_button)
+        return row
+
+    def _on_show_diagram(self):
+        if self._diagram_dialog is None:
+            self._diagram_dialog = DiagramViewerDialog(self)
+        self._diagram_dialog.show()
+        self._diagram_dialog.raise_()
+        self._diagram_dialog.activateWindow()
 
     # --- rutas (D1): no forman parte del esquema de campos ---
 
@@ -107,9 +134,22 @@ class FerloConfigPage(QWidget):
 
     def _on_path_edited(self, key: str, line_edit: QLineEdit):
         self._draft["paths"][key] = line_edit.text().strip()
-        self._persist()
+        self._mark_dirty()
 
-    # --- secciones generadas desde SETTINGS_SCHEMA ---
+    # --- secciones generadas desde SETTINGS_SCHEMA, en una rejilla horizontal
+    # (varios grupos por fila) en vez de una sola columna: con tantas
+    # secciones, apilarlas todas verticalmente desperdiciaba ancho de página ---
+
+    def _build_sections_grid(self):
+        grid = QGridLayout()
+        for col in range(_SECTIONS_PER_ROW):
+            grid.setColumnStretch(col, 1)
+        for index, section in enumerate(SETTINGS_SCHEMA):
+            row, col = divmod(index, _SECTIONS_PER_ROW)
+            group = self._build_section_group(section)
+            group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            grid.addWidget(group, row, col, alignment=Qt.AlignmentFlag.AlignTop)
+        return grid
 
     def _build_section_group(self, section):
         group = QGroupBox(section.label)
@@ -147,20 +187,55 @@ class FerloConfigPage(QWidget):
 
     def _on_field_changed(self, section, field, value):
         self._draft[section.key][field.key] = value
-        self._persist()
+        self._mark_dirty()
 
-    def _persist(self):
+    # --- guardado explícito: los cambios se acumulan en self._draft y no
+    # tocan disco hasta que se pulsa "Guardar" ---
+
+    def _build_save_bar(self):
+        self._save_button = AppSaveButton("Guardar")
+        self._save_button.setEnabled(False)
+        self._save_button.clicked.connect(self._on_save_clicked)
+
+        discard_button = AppButton("Descartar cambios", color="#8a8a8a")
+        discard_button.clicked.connect(self._on_discard_clicked)
+
+        row = QHBoxLayout()
+        row.addStretch()
+        row.addWidget(discard_button)
+        row.addWidget(self._save_button)
+        return row
+
+    def _mark_dirty(self):
+        self._dirty = True
+        self._save_button.setEnabled(True)
+
+    def _on_save_clicked(self):
+        if self._draft == self._controller.settings.as_dict():
+            push(Module.FERLO, catalog.config_unchanged())
+            return
+
         settings = Settings(self._draft)
         save_settings(settings)
         self._controller.reload()
+        self._dirty = False
+        self._save_button.setEnabled(False)
 
         if settings.validation_warnings:
             push(Module.FERLO, catalog.config_out_of_range(settings.validation_warnings))
         else:
-            # Sin botón "Guardar" -se persiste solo, igual que Steriflow-: el
-            # aviso es lo único que dice que el cambio ha entrado, y el log
-            # es lo que explica meses después por qué cambió un umbral.
             announce(agent_logger(), catalog.config_saved())
+
+    def _on_discard_clicked(self):
+        self._draft = self._controller.settings.as_dict()
+        for (section_key, field_key), spin in self._spinboxes.items():
+            spin.blockSignals(True)
+            spin.setValue(self._draft[section_key][field_key])
+            spin.blockSignals(False)
+        self._entrada_edit.setText(self._draft["paths"]["entrada"])
+        self._archivo_edit.setText(self._draft["paths"]["archivo"])
+        self._dirty = False
+        self._save_button.setEnabled(False)
 
     # --- programas de consigna: sin Excel de origen que portar (ver
     # logic/analysis/programs.py), se gestionan a mano ---
@@ -183,7 +258,7 @@ class FerloConfigPage(QWidget):
         self._programs_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._programs_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
-        add_button = AppButton("Añadir / editar")
+        add_button = AppAddButton("Añadir / editar")
         add_button.clicked.connect(self._on_add_program)
         deactivate_button = AppButton("Activar/desactivar seleccionado")
         deactivate_button.clicked.connect(self._on_toggle_active)

@@ -28,7 +28,13 @@ from src.modules.steriflow.ui.config_presenter import SteriflowConfigPresenter
 from src.shared.assets.resources import MATERIA_GREEN_IMAGE, MATERIA_RED_IMAGE, MATERIA_YELLOW_IMAGE
 from src.shared.messages.notice import announce, push
 from src.shared.messages.types import Module
-from src.shared.ui.components.app_button import AppButton
+from src.shared.ui.components.app_button import (
+    AppAddButton,
+    AppButton,
+    AppDeleteButton,
+    AppModifyButton,
+    AppSaveButton,
+)
 from src.modules.steriflow.tasks.status_checker import AutoclaveStatusChecker
 
 # Índices de columna de la tabla de autoclaves. Explícitos porque "Activo" es
@@ -68,11 +74,14 @@ class SteriflowConfigPage(QWidget):
         self._status_timer.setInterval(_STATUS_REFRESH_INTERVAL_MS)
         self._status_timer.timeout.connect(self._refresh_statuses)
 
+        self._dirty = False
+
         layout = QVBoxLayout(self)
         layout.addWidget(self._build_paths_group())
         layout.addWidget(self._build_autoclaves_group())
         layout.addWidget(self._build_schedules_group())
         layout.addStretch()
+        layout.addLayout(self._build_save_bar())
 
         self._repaint()
         self._refresh_statuses()
@@ -127,11 +136,11 @@ class SteriflowConfigPage(QWidget):
 
     def _on_local_root_edited(self):
         self._presenter.set_local_root(self._local_root_edit.text().strip())
-        self._persist()
+        self._mark_dirty()
 
     def _on_server_root_edited(self):
         self._presenter.set_server_root(self._server_root_edit.text().strip())
-        self._persist()
+        self._mark_dirty()
 
     def _build_autoclaves_group(self):
         group = QGroupBox("Autoclaves")
@@ -157,13 +166,13 @@ class SteriflowConfigPage(QWidget):
         self._autoclaves_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._autoclaves_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
-        add_button = AppButton("Añadir fila")
+        add_button = AppAddButton("Añadir fila")
         add_button.clicked.connect(self._add_autoclave_row)
 
-        remove_button = AppButton("Quitar seleccionado", color="#e20c0c")
+        remove_button = AppDeleteButton("Quitar seleccionado")
         remove_button.clicked.connect(self._remove_selected_autoclave_row)
 
-        edit_button = AppButton("Editar seleccionado")
+        edit_button = AppModifyButton("Editar seleccionado")
         edit_button.clicked.connect(self._edit_selected_autoclave_row)
 
         buttons_layout = QHBoxLayout()
@@ -182,13 +191,13 @@ class SteriflowConfigPage(QWidget):
         dialog = _AutoclaveDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._presenter.add_autoclave(_autoclave_from_dialog(dialog))
-            self._persist()
+            self._mark_dirty()
 
     def _remove_selected_autoclave_row(self):
         row = self._autoclaves_table.currentRow()
         if row >= 0:
             self._presenter.remove_autoclave(row)
-            self._persist()
+            self._mark_dirty()
 
     def _edit_selected_autoclave_row(self):
         row = self._autoclaves_table.currentRow()
@@ -207,7 +216,7 @@ class SteriflowConfigPage(QWidget):
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._presenter.update_autoclave(row, _autoclave_from_dialog(dialog))
-            self._persist()
+            self._mark_dirty()
 
     def _build_schedules_group(self):
         group = QGroupBox("Horarios")
@@ -222,13 +231,13 @@ class SteriflowConfigPage(QWidget):
         self._schedules_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._schedules_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
-        add_button = AppButton("Añadir fila")
+        add_button = AppAddButton("Añadir fila")
         add_button.clicked.connect(self._add_schedule_row)
 
-        remove_button = AppButton("Quitar seleccionado", color="#e20c0c")
+        remove_button = AppDeleteButton("Quitar seleccionado")
         remove_button.clicked.connect(self._remove_selected_schedule_row)
 
-        edit_button = AppButton("Editar seleccionado")
+        edit_button = AppModifyButton("Editar seleccionado")
         edit_button.clicked.connect(self._edit_selected_schedule_row)
 
         buttons_layout = QHBoxLayout()
@@ -247,7 +256,7 @@ class SteriflowConfigPage(QWidget):
         dialog = _ScheduleDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._presenter.add_hour(dialog.value().toPython())
-            self._persist()
+            self._mark_dirty()
 
     def _remove_selected_schedule_row(self):
         row = self._schedules_table.currentRow()
@@ -259,7 +268,7 @@ class SteriflowConfigPage(QWidget):
             return
 
         self._presenter.remove_hour(row)
-        self._persist()
+        self._mark_dirty()
 
     def _edit_selected_schedule_row(self):
         row = self._schedules_table.currentRow()
@@ -270,7 +279,7 @@ class SteriflowConfigPage(QWidget):
         dialog = _ScheduleDialog(self, time=QTime(hour.hour, hour.minute))
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._presenter.update_hour(row, dialog.value().toPython())
-            self._persist()
+            self._mark_dirty()
 
     def _repaint(self):
         """Repinta todo desde el presenter, nunca al revés: así la tabla
@@ -368,23 +377,54 @@ class SteriflowConfigPage(QWidget):
                 return row
         return None
 
-    def _persist(self):
-        """Guarda de inmediato el estado actual del borrador: cada acción puntual
-        (elegir una carpeta, aceptar el diálogo de autoclave/horario, quitar una
-        fila) ya deja la configuración guardada — no hay un botón "Guardar" aparte."""
+    # --- guardado explícito: cada acción puntual (elegir una carpeta, aceptar
+    # el diálogo de autoclave/horario, quitar una fila) solo marca el borrador
+    # como sucio; el guardado en disco espera al botón "Guardar cambios" ---
+
+    def _build_save_bar(self):
+        self._save_button = AppSaveButton("Guardar cambios")
+        self._save_button.setEnabled(False)
+        self._save_button.clicked.connect(self._on_save_clicked)
+
+        discard_button = AppButton("Descartar cambios", color="#8a8a8a")
+        discard_button.clicked.connect(self._on_discard_clicked)
+
+        row = QHBoxLayout()
+        row.addStretch()
+        row.addWidget(discard_button)
+        row.addWidget(self._save_button)
+        return row
+
+    def _mark_dirty(self):
+        self._dirty = True
+        self._save_button.setEnabled(True)
+        self._repaint()
+
+    def _on_save_clicked(self):
         outcome = self._presenter.save()
         self._repaint()
 
         if outcome.status is SaveStatus.INVALID:
             push(Module.STERIFLOW, catalog.settings_issue(outcome.issue))
             return
-        if outcome.status is SaveStatus.SAVED:
+
+        if outcome.status is SaveStatus.UNCHANGED:
+            push(Module.STERIFLOW, catalog.settings_unchanged())
+        else:
             self._refresh_statuses()
-            # Esta página no tiene botón "Guardar" -se persiste sola-, así que sin
-            # este aviso no hay forma de saber que el cambio ha entrado. Y la línea
-            # de log es la que explica meses después por qué el backup dejó de
+            # El log es lo que explica meses después por qué el backup dejó de
             # copiar: alguien cambió una ruta tal día.
             announce(agent_logger(), catalog.settings_saved())
+
+        self._dirty = False
+        self._save_button.setEnabled(False)
+
+    def _on_discard_clicked(self):
+        self._presenter.load()
+        self._repaint()
+        self._refresh_statuses()
+        self._dirty = False
+        self._save_button.setEnabled(False)
 
 
 def _autoclave_from_dialog(dialog: "_AutoclaveDialog") -> AutoclaveConfig:

@@ -78,6 +78,10 @@ def settings_saved() -> Notice:
     return Notice(MessageType.SUCCESS, "Configuración de Steriflow guardada")
 
 
+def settings_unchanged() -> Notice:
+    return Notice(MessageType.INFO, "No hay cambios que guardar en la configuración de Steriflow")
+
+
 _SETTINGS_ISSUE_TEXTS = {
     SettingsIssue.LOCAL_ROOT_REQUIRED: "La carpeta raíz local es obligatoria.",
     SettingsIssue.SERVER_ROOT_REQUIRED: "La carpeta raíz de servidor es obligatoria.",
