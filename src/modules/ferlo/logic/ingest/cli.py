@@ -13,12 +13,11 @@ import argparse
 import sqlite3
 
 from src.modules.ferlo.logic.config import load_settings
+from src.modules.ferlo.logic.machines import MACHINES
 from src.modules.ferlo.logic.schema import ensure_tables
 from src.shared.db.connection import DB_PATH
 
 from .service import import_machine
-
-MACHINES = ["F1", "F2", "F3", "F4", "F5"]
 
 
 def _connect() -> sqlite3.Connection:

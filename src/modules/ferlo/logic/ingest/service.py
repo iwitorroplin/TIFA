@@ -34,7 +34,7 @@ from src.modules.ferlo.logic.logs import agent_logger
 from . import archive, repo
 from .checks import check_rows
 from .normalize import build_series, parse_timestamp
-from .reader import RawRow, read_raw_rows
+from .reader import read_raw_rows
 
 
 @dataclass(slots=True)
@@ -121,7 +121,7 @@ def import_machine(
         )
 
     for anio, mes in sorted(meses_tocados):
-        ciclos = _reanalizar_mes(conn, settings, machine, archivo_dir, anio, mes)
+        ciclos = _reanalizar_mes(conn, settings, machine, anio, mes)
         resumen.cycles_by_month[(anio, mes)] = ciclos
         log.log(f"Ferlo {machine}: {anio:04d}-{mes:02d} - {len(ciclos)} ciclos")
 
@@ -130,15 +130,11 @@ def import_machine(
 
 
 def _reanalizar_mes(
-    conn: sqlite3.Connection, settings: Settings, machine: str,
-    archivo_dir: Path, anio: int, mes: int,
+    conn: sqlite3.Connection, settings: Settings, machine: str, anio: int, mes: int,
 ) -> list[CycleResult]:
     """Relee el mensual completo y reanaliza: renormalizar sigue siendo
     releer (no hace falta guardar una capa cruda para poder recalcular)."""
-    ruta = archive.monthly_archive_path(archivo_dir, machine, anio, mes)
-    rows = read_raw_rows(ruta)
-    serie = build_series(machine, ruta.name, rows)
-
+    serie = _leer_mes(settings, machine, anio, mes)
     ciclos = segment(serie, settings)
     for ciclo in ciclos:
         code = analysis_repo.existing_program_code(conn, machine, ciclo.start_ts)
@@ -146,3 +142,54 @@ def _reanalizar_mes(
         assign(serie, ciclo, settings, programa)
         analysis_repo.save_cycle(conn, machine, serie, ciclo)
     return ciclos
+
+
+def _leer_mes(settings: Settings, machine: str, anio: int, mes: int):
+    ruta = archive.monthly_archive_path(settings.archivo_dir, machine, anio, mes)
+    rows = read_raw_rows(ruta)
+    return build_series(machine, ruta.name, rows)
+
+
+def reassign_program(
+    conn: sqlite3.Connection,
+    settings: Settings,
+    machine: str,
+    started_at: dt.datetime,
+    program_code: int | None,
+) -> CycleResult | None:
+    """Asigna (o quita, con `program_code=None`) el programa de un ciclo ya
+    guardado, y lo reevalúa. Es el único punto de la Fase 4 que escribe
+    `program_code` -asignar es siempre un acto explícito (invariante de la
+    Fase 0): a diferencia de `_reanalizar_mes`, aquí el programa lo dice
+    quien llama, nunca `existing_program_code`.
+
+    Relee el mensual completo -exactamente lo que haría la siguiente
+    reimportación- para que fases, métricas y veredicto salgan idénticos a
+    los que saldrían si se reimportara ahora mismo: no hay atajo que
+    reconstruya la serie solo a partir de lo ya guardado sin perder las
+    incidencias de fuera del ciclo que `validate.py` hereda por ventana.
+
+    Devuelve `None` si el mensual no existe o el ciclo ya no aparece al
+    segmentar de nuevo -por ejemplo, si los umbrales de detección cambiaron
+    entre medias-.
+    """
+    ruta = archive.monthly_archive_path(settings.archivo_dir, machine, started_at.year, started_at.month)
+    if not ruta.exists():
+        return None
+
+    serie = _leer_mes(settings, machine, started_at.year, started_at.month)
+    ciclos = segment(serie, settings)
+    objetivo = next((c for c in ciclos if c.start_ts == started_at), None)
+    if objetivo is None:
+        return None
+
+    programa = analysis_repo.load_program(conn, program_code) if program_code is not None else None
+    assign(serie, objetivo, settings, programa)
+    cycle_id = analysis_repo.save_cycle(conn, machine, serie, objetivo)
+    # save_cycle() nunca toca program_code en su rama de UPDATE -por diseño,
+    # para que una reimportación no pueda deshacer una asignación (ver su
+    # docstring)-. Esta es la única llamada de la Fase 4 que sí debe
+    # cambiarlo, porque aquí el programa lo dice explícitamente quien llama.
+    analysis_repo.write_program_assignment(conn, cycle_id, objetivo)
+    conn.commit()
+    return objetivo

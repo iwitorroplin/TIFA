@@ -37,6 +37,17 @@ class Severity(str, Enum):
     ERROR = "error"
 
 
+class ManualVerdict(str, Enum):
+    """Veredicto de una persona sobre un ciclo (columna
+    `ferlo_cycle.manual_verdict`, ver `logic/schema.py`). 'none' es el
+    valor por defecto -todavia sin revisar-, nunca lo escribe una
+    reimportacion (ver `logic/analysis/repo.py:save_cycle`)."""
+
+    NONE = "none"
+    CONFORMING = "conforming"
+    NON_CONFORMING = "non_conforming"
+
+
 class FindingCode(str, Enum):
     """Codigos estables: se guardan en base de datos, no se renombran."""
 
@@ -73,12 +84,19 @@ class Finding:
 @dataclass(slots=True)
 class SterilizationProgram:
     """Programa de consigna: solo lo que el analisis necesita para evaluar un
-    ciclo -codigo, temperatura y tiempo objetivo, y si esta activo-."""
+    ciclo -codigo, temperatura y tiempo objetivo, y si esta activo-.
+
+    `name` es una etiqueta libre (columna `ferlo_program.name`, ver
+    `logic/schema.py`) que el analisis nunca lee -solo la pestaña de
+    Configuracion (Fase 4), para que la tabla de programas sea reconocible
+    sin memorizar 38 pares de numeros-.
+    """
 
     code: int
     target_temperature_c: float
     target_time_min: float
     is_active: bool = True
+    name: str = ""
 
     @property
     def display_code(self) -> str:

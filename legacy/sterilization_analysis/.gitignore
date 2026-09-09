@@ -1,3 +1,0 @@
-# load_settings() lo regenera solo desde DEFAULT_SETTINGS si falta (ver
-# src/steril/core/config.py); no hay nada que versionar aqui.
-config/settings.json
