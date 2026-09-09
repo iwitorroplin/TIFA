@@ -1,3 +1,33 @@
-# Ferlo todavía no tiene lógica propia, así que este fichero no tiene campos
-# todavía. Cuando los tenga, se leerán igual que en steriflowConfig.default.yaml:
-# ver src/config/files.py.
+# Umbrales del analisis de Ferlo. Se edita desde la pestana de Configuracion
+# (Fase 4); esto es solo el punto de partida del primer arranque. El esquema
+# de cada campo -etiqueta, unidad, rango, ayuda- vive en
+# src/modules/ferlo/logic/config.py (SETTINGS_SCHEMA), no aqui.
+
+# D1: entrada = buzon transitorio (el operario deja aqui lo que exporte, por
+# maquina); archivo = mensual que TIFA mantiene y al que solo se le anade.
+paths:
+  entrada: "data/ferlo/entrada"
+  archivo: "data/ferlo/archivo"
+
+sampling:
+  nominal_sample_interval_s: 5
+
+cycle_detection:
+  cycle_start_temperature_c: 50.00
+  cycle_end_temperature_c: 50.00
+  min_cycle_duration_min: 10.0
+  min_cycle_peak_temperature_c: 60.0
+  setpoint_mode_bin_c: 0.1
+  setpoint_mode_floor_c: 60.0
+
+sterilization_phase:
+  sterilization_tolerance_c: 0.50
+  exit_debounce_s: 60
+  stabilization_window_min: 10.0
+
+acceptance:
+  acceptance_tolerance_c: 0.50
+  acceptance_time_tolerance_min: 1.0
+
+review:
+  review_deviation_c: 1.00

@@ -7,12 +7,27 @@ dependencies = [
     "PySide6>=6.11,<7",
     "PyYAML>=6.0,<7",
     "pdfplumber>=0.11,<1",
+    # Ferlo, ui/detail_page.py (Fase 4, D9): curva del ciclo. Zoom y
+    # desplazamiento del grafico, a cambio de una dependencia mas en el
+    # empaquetado del ejecutable -decision tomada, no la recomendada-.
+    "pyqtgraph>=0.13,<1",
     # Servidor web (web/), proceso aparte de la app de escritorio: ver web/__init__.py.
     "fastapi>=0.115,<1",
     "uvicorn>=0.32,<1",
     "jinja2>=3.1,<4",
 ]
 
+[project.optional-dependencies]
+# openpyxl: solo lo necesita legacy/sterilization_analysis/ (Fase 0 del port
+# de Ferlo, referencia contra los .xlsx reales); no es dependencia de TIFA.
+dev = [
+    "pytest>=8,<9",
+    "openpyxl>=3.1,<4",
+]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "legacy/sterilization_analysis/tests"]

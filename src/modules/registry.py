@@ -41,6 +41,12 @@ def _steriflow_log_path() -> Path:
     return agent_log_path()
 
 
+def _ferlo_log_path() -> Path:
+    from src.modules.ferlo.logic.logs import agent_log_path
+
+    return agent_log_path()
+
+
 def _build_modules() -> list[ModuleSpec]:
     from src.modules.config.ui.view import ConfigView
     from src.modules.ferlo.ui.view import FerloView
@@ -49,12 +55,20 @@ def _build_modules() -> list[ModuleSpec]:
     from src.modules.macona.ui.view import MaconaView
     from src.modules.pasteurization.ui.view import PasteurizationView
     from src.modules.prueba_ui.ui.view import PruebaUIView
+    from src.modules.ferlo.logic.schema import ensure_tables as ensure_ferlo_tables
     from src.modules.steriflow.logic.schema import ensure_tables as ensure_steriflow_tables
     from src.modules.steriflow.ui.view import SteriflowView
 
     core_specs = [
         ModuleSpec(Module.HOME, "Home", HomeView, icon=APP_ICON, color="#3f51b5"),
-        ModuleSpec(Module.FERLO, "Ferlo", FerloView, has_logs=True),
+        ModuleSpec(
+            Module.FERLO,
+            "Ferlo",
+            FerloView,
+            has_logs=True,
+            ensure_tables=ensure_ferlo_tables,
+            log_path=_ferlo_log_path,
+        ),
         ModuleSpec(
             Module.STERIFLOW,
             "Steriflow",
