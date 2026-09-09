@@ -1,9 +1,12 @@
-"""Tabla `web_user`: quién puede entrar y a qué único módulo tiene acceso.
+"""Tabla `web_user`: quién puede entrar y a qué módulo tiene acceso.
 
 `module` guarda el `id` de un `WebModuleSpec` de `web/registry.py`
 (`"steriflow"`, `"ferlo"`...) -no hay clave ajena real porque esa lista vive
 en Python, no en una tabla; la validez del valor se comprueba al sembrar
-usuarios (`seed.py`), no aquí-.
+usuarios (`seed.py`), no aquí-. `ALL_MODULES` es el único valor especial: un
+usuario con ese `module` (el admin de `seed.py`) tiene acceso a todos, no a
+un id de módulo concreto -lo comprueban `web/auth.py::require_module` y las
+plantillas, no esta tabla-.
 
 Mismo patrón que `web/modules/steriflow/db.py`: DDL, modelo y acceso a datos
 juntos en un solo fichero, funciones sueltas que reciben `conn` como primer
@@ -17,6 +20,9 @@ import sqlite3
 from dataclasses import dataclass
 
 from src.shared.db.iso import from_iso, to_iso
+
+# Valor de `module` que da acceso a todos los módulos, no a uno concreto.
+ALL_MODULES = "*"
 
 DDL = """
 CREATE TABLE IF NOT EXISTS web_user (

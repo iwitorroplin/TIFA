@@ -2,9 +2,17 @@
 {% block titulo %}TIFA · Inicio{% endblock %}
 {% block content %}
 <h1>Hola, {{ request.state.user.name }}</h1>
+{% if request.state.user.module == ALL_MODULES %}
+<p>Tienes acceso a todos los módulos.</p>
+<div class="card-links">
+  {% for modulo in web_modules %}
+  <a class="card-link" href="/{{ modulo.id }}">{{ modulo.label }}</a>
+  {% endfor %}
+</div>
+{% else %}
 <p>Tu módulo asignado es <strong>{{ request.state.user.module }}</strong>.</p>
-
 <div class="card-links">
   <a class="card-link" href="/{{ request.state.user.module }}">Entrar</a>
 </div>
+{% endif %}
 {% endblock %}

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from fastapi import Request
 
-from web.modules.user.db import WebUser
+from web.modules.user.db import ALL_MODULES, WebUser
 
 
 class RequiereLogin(Exception):
@@ -39,11 +39,11 @@ def require_login(request: Request) -> WebUser:
 def require_module(module_id: str):
     """Fábrica de dependencia: `Depends(require_module("steriflow"))` en cada
     ruta de ese módulo -página o API- exige sesión Y que sea justo ese
-    módulo el asignado al usuario."""
+    módulo el asignado al usuario -o que tenga `ALL_MODULES` (admin)-."""
 
     def dependencia(request: Request) -> WebUser:
         usuario = require_login(request)
-        if usuario.module != module_id:
+        if usuario.module != module_id and usuario.module != ALL_MODULES:
             raise AccesoDenegado()
         return usuario
 

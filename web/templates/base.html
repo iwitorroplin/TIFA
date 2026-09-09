@@ -25,10 +25,11 @@
          en src/modules/registry.py. -->
     <a class="nav-link{% if request.url.path == '/' %} active{% endif %}"
        href="/" style="--nav-color: #3f51b5;">Home</a>
-    <!-- Solo el módulo asignado a este usuario, nunca los otros tres: no es
-         un detalle visual, es la propia regla de acceso hecha navegable -->
+    <!-- Solo el módulo asignado a este usuario, nunca los otros tres -salvo
+         ALL_MODULES (admin), que los ve todos-: no es un detalle visual, es
+         la propia regla de acceso hecha navegable -->
     {% for modulo in web_modules %}
-    {% if modulo.id == request.state.user.module %}
+    {% if modulo.id == request.state.user.module or request.state.user.module == ALL_MODULES %}
     <a class="nav-link{% if request.url.path.startswith('/' ~ modulo.id) %} active{% endif %}"
        href="/{{ modulo.id }}"
        {% if modulo.color %}style="--nav-color: {{ modulo.color }};"{% endif %}>{{ modulo.label }}</a>

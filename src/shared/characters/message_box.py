@@ -1,7 +1,7 @@
 import sys
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QPainter, QLinearGradient, QColor, QFont, QTextOption
+from PySide6.QtGui import QFont, QTextOption
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 from src.shared.characters.portrait import tinted_portrait
 from src.shared.characters.senders import ACCENT_COLORS, SENDERS
 from src.shared.messages.types import MessageType
+from src.shared.ui.components.gradient_box import GradientBox
 
 _PORTRAIT_SIZE = 96
 
@@ -25,10 +26,6 @@ _PORTRAIT_SIZE = 96
 _WIDTH = 640
 _MIN_HEIGHT = 210
 _MAX_HEIGHT = 480
-
-# El marco exterior del cuadro siempre es blanco; solo el nombre y el
-# retrato se tiñen según el tipo de mensaje.
-_BORDER_COLOR = QColor("#ffffff")
 
 # Cuánto se queda en pantalla un mensaje que solo confirma ("backup
 # finalizado"): se cierra solo, sin pedir un clic por cada acción. WARNING y
@@ -46,7 +43,7 @@ _AUTO_CLOSE_MS: dict[MessageType, int] = {
 # está en _AUTO_CLOSE_MS (WARNING y ERROR) sale modal.
 
 
-class MessageBox(QWidget):
+class MessageBox(GradientBox):
 
     # Se emite al cerrarse, para que quien la muestre sepa que el
     # personaje ha dejado de hablar (ver HomeView._on_message_closed).
@@ -193,8 +190,6 @@ class MessageBox(QWidget):
             }
         """)
 
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-
         # Alto dinámico: una primera pasada de layout con adjustSize() da la
         # geometría real (incluido el ancho de viewport de message_label ya
         # descontado su marco interno), así "overhead" -todo lo que NO es el
@@ -234,58 +229,6 @@ class MessageBox(QWidget):
         super().closeEvent(event)
         self.closed.emit()
 
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        # -------------------------------------------------
-        # MARCO EXTERIOR (siempre blanco)
-        # -------------------------------------------------
-
-        outer_rect = self.rect().adjusted(2, 2, -2, -2)
-
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(_BORDER_COLOR)
-
-        painter.drawRoundedRect(
-            outer_rect,
-            14,
-            14
-        )
-
-        # -------------------------------------------------
-        # INTERIOR
-        # -------------------------------------------------
-
-        border_width = 5
-
-        inner_rect = outer_rect.adjusted(
-            border_width,
-            border_width,
-            -border_width,
-            -border_width
-        )
-
-        # Degradado azul → negro
-        gradient = QLinearGradient(
-            0,
-            inner_rect.top(),
-            0,
-            inner_rect.bottom()
-        )
-
-        gradient.setColorAt(0.0, QColor("#17366f"))
-        gradient.setColorAt(0.45, QColor("#0b1d40"))
-        gradient.setColorAt(1.0, QColor("#000000"))
-
-        painter.setBrush(gradient)
-        painter.setPen(Qt.PenStyle.NoPen)
-
-        painter.drawRoundedRect(
-            inner_rect,
-            9,
-            9
-        )
 
 # ---------------------------------------------------------
 # DEMO

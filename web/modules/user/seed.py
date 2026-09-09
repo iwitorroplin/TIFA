@@ -1,4 +1,5 @@
-"""Usuarios de prueba, uno por módulo, para no depender de un formulario de
+"""
+Usuarios de prueba, uno por módulo, para no depender de un formulario de
 alta que no existe todavía (`web/modules/user/routes.py` solo tiene login).
 
 Contraseñas de usar-y-cambiar, no de producción: sirven para probar el
@@ -11,11 +12,13 @@ from __future__ import annotations
 
 import sqlite3
 
-from web.modules.user.db import create_user, get_by_name
+from web.modules.user.db import ALL_MODULES, create_user, get_by_name
 from web.modules.user.hashing import hash_password
 
-# (nombre, contraseña, módulo)
+# (nombre, contraseña, módulo) -ALL_MODULES para admin: acceso a los cuatro,
+# no a uno solo-
 _USUARIOS_SEMILLA = [
+    ("Admin", "HD12345ab.", ALL_MODULES),
     ("steriflow", "steriflow123", "steriflow"),
     ("ferlo", "ferlo123", "ferlo"),
     ("macona", "macona123", "macona"),

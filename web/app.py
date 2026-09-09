@@ -19,7 +19,7 @@ from src.shared.paths import ASSETS_DIR
 from web.auth import AccesoDenegado, RequiereLogin, require_login
 from web.config import STATIC_DIR
 from web.db import open_conn
-from web.modules.user.db import get_by_id
+from web.modules.user.db import ALL_MODULES, get_by_id
 from web.modules.user.routes import router as user_router
 from web.modules.user.session import COOKIE_NAME, verify_cookie_value
 from web.registry import WEB_MODULES
@@ -41,6 +41,8 @@ def create_app() -> FastAPI:
     # La navbar se pinta en templates/base.html a partir de esta misma lista:
     # un módulo nuevo en WEB_MODULES aparece ahí sin tocar ninguna plantilla.
     templates.env.globals["web_modules"] = WEB_MODULES
+    # Para que base.html y home.html reconozcan al admin sin hardcodear "*".
+    templates.env.globals["ALL_MODULES"] = ALL_MODULES
 
     @app.middleware("http")
     async def _cargar_usuario(request: Request, call_next):

@@ -44,7 +44,6 @@ class BackupService:
 
     def run(self) -> None:
         logger = self._new_logger()
-        logger.log("PASO 0: Prepara la carpeta de logs y el archivo de log de esta ejecución")
         disponibilidad = self._check_availability(logger, "backup automático")
         incidencias = self._fetch_all(logger, disponibilidad) + self._backup_all(logger)
         announce(logger, catalog.full_backup_finished(incidencias))
@@ -52,7 +51,6 @@ class BackupService:
     def fetch(self) -> None:
         """Acción manual: solo trae los PDF nuevos de las autoclaves a su carpeta local."""
         logger = self._new_logger()
-        logger.log("PASO 0: Prepara la carpeta de logs y el archivo de log de esta ejecución")
         disponibilidad = self._check_availability(logger, "importación manual")
         incidencias = self._fetch_all(logger, disponibilidad)
 
@@ -67,10 +65,6 @@ class BackupService:
     def backup(self) -> None:
         """Acción manual: solo replica lo que ya hay en local hacia el servidor de cada autoclave."""
         logger = self._new_logger()
-        logger.log("PASO 0: Prepara la carpeta de logs y el archivo de log de esta ejecución")
-        # Solo para que quede constancia en el log de cómo estaban las
-        # máquinas al lanzar la acción: replicar a servidor no depende de
-        # ellas (va de local a servidor), así que el resultado no se usa.
         self._check_availability(logger, "exportación manual")
         incidencias = self._backup_all(logger)
         announce(logger, catalog.server_backup_finished(incidencias))
@@ -129,7 +123,7 @@ class BackupService:
     ) -> int:
         local_path = Path(autoclave.local_folder)
 
-        logger.log(f"[{autoclave.name}] PASO 1: asegura la carpeta local de staging")
+        logger.log(f"[INFO] [{autoclave.name}]: Check local_path")
         local_path.mkdir(parents=True, exist_ok=True)
 
         if not autoclave.path_folder.strip():
@@ -155,8 +149,8 @@ class BackupService:
             return 0
 
         logger.log(
-            f"[{autoclave.name}] PASO 3: trae los PDF desde {autoclave.path_folder} "
-            f"a la carpeta local de staging"
+            f"[INFO] [{autoclave.name}] : Import PDF {autoclave.path_folder} to {autoclave.local_folder}"
+
         )
         # Destino como string crudo, no str(local_path): igual que con
         # path_folder, Path le añadiría una barra final a un recurso pelado.
@@ -169,13 +163,13 @@ class BackupService:
         local_path = Path(autoclave.local_folder)
         server_path = Path(autoclave.backup_folder)
 
-        logger.log(f"[{autoclave.name}] PASO 2: asegura la carpeta de servidor")
+        logger.log(f"[INFO] [{autoclave.name}] : Check {autoclave.backup_folder} asegura la carpeta de servidor")
         server_path.mkdir(parents=True, exist_ok=True)
 
-        logger.log(f"[{autoclave.name}] PASO 4: detecta informes nuevos desde el último backup")
+        logger.log(f"[INFO] [{autoclave.name}] : Check new file")
         nuevos = new_reports(local_path, server_path)
         if nuevos:
-            logger.log(f"[{autoclave.name}] {len(nuevos)} informe(s) nuevo(s):")
+            logger.log(f"[{autoclave.name}] {len(nuevos)} pdf(s) new(s):")
             for pdf in nuevos:
                 logger.log(f"[{autoclave.name}]   {pdf.relative_to(local_path)}")
         else:
