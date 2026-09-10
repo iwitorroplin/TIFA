@@ -32,20 +32,18 @@ from src.shared.ui import printing
 _COL_AUTOCLAVE = 0
 _COL_STARTED_AT = 1
 _COL_PRODUCT = 2
-_COL_BATCH = 3
-_COL_CYCLE_NUMBER = 4
-_COL_PHASE = 5
-_COL_DURATION = 6
-_COL_TEMP_MEAN = 7
-_COL_TEMP_MIN = 8
-_COL_TEMP_MAX = 9
-_COL_REVIEW = 10
+_COL_CYCLE_NUMBER = 3
+_COL_PHASE = 4
+_COL_DURATION = 5
+_COL_TEMP_MEAN = 6
+_COL_TEMP_MIN = 7
+_COL_TEMP_MAX = 8
+_COL_REVIEW = 9
 
 _HEADERS = [
     "Autoclave",
     "Fecha inicio",
     "Producto",
-    "Lote",
     "Nº ciclo",
     "Fase esterilización",
     "Duración esterilización",
@@ -68,7 +66,6 @@ _PRINT_ALIGNS = [
     printing.Align.LEFT,    # Autoclave
     printing.Align.LEFT,    # Fecha inicio
     printing.Align.LEFT,    # Producto
-    printing.Align.LEFT,    # Lote
     printing.Align.RIGHT,   # Nº ciclo
     printing.Align.LEFT,    # Fase esterilización
     printing.Align.RIGHT,   # Duración
@@ -85,6 +82,9 @@ _SORT_OPTIONS = [
     ("Fecha (reciente primero)", False),
     ("Autoclave y fecha", True),
 ]
+# Por defecto se ordena por autoclave y fecha, que es como se busca un ciclo
+# concreto la mayoría de las veces.
+_DEFAULT_SORT_INDEX = 1
 
 _PAGE_SIZES = [20, 50, 100]
 # Al escribir en el filtro de producto se espera a que el usuario pare de
@@ -125,7 +125,6 @@ class SteriflowDataPage(QWidget):
         table.setHorizontalHeaderLabels(_HEADERS)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         table.horizontalHeader().setSectionResizeMode(_COL_PRODUCT, QHeaderView.ResizeMode.Stretch)
-        table.horizontalHeader().setSectionResizeMode(_COL_BATCH, QHeaderView.ResizeMode.Stretch)
         table.verticalHeader().setVisible(False)
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -147,6 +146,7 @@ class SteriflowDataPage(QWidget):
         self._sort_combo = QComboBox()
         for etiqueta, by_autoclave in _SORT_OPTIONS:
             self._sort_combo.addItem(etiqueta, userData=by_autoclave)
+        self._sort_combo.setCurrentIndex(_DEFAULT_SORT_INDEX)
         self._sort_combo.currentIndexChanged.connect(self._on_filters_changed)
 
         self._date_from_checkbox = QCheckBox("Desde:")
@@ -155,6 +155,10 @@ class SteriflowDataPage(QWidget):
         self._date_from_edit.setCalendarPopup(True)
         self._date_from_edit.setEnabled(False)
         self._date_from_edit.dateChanged.connect(self._on_filters_changed)
+        # Por defecto se filtra desde hoy: abrir la pestaña y ver todo el
+        # histórico de golpe es tanto más lento como menos útil que partir del
+        # día en curso.
+        self._date_from_checkbox.setChecked(True)
 
         self._date_to_checkbox = QCheckBox("Hasta:")
         self._date_to_checkbox.toggled.connect(self._on_date_filter_toggled)
@@ -238,15 +242,21 @@ class SteriflowDataPage(QWidget):
         self._on_filters_changed()
 
     def _clear_filters(self):
+        # Los filtros por defecto son fecha (desde hoy) y orden por autoclave,
+        # no "sin filtros": es la vista que de verdad se usa al entrar.
         self._filter_debounce.stop()
         self._product_filter_edit.clear()
         self._autoclave_combo.setCurrentIndex(0)
-        self._sort_combo.setCurrentIndex(0)
-        self._date_from_checkbox.setChecked(False)
+        self._sort_combo.setCurrentIndex(_DEFAULT_SORT_INDEX)
+        self._date_from_edit.setDate(QDate.currentDate())
         self._date_to_checkbox.setChecked(False)
         self._needs_review_checkbox.setChecked(False)
-        self._presenter.clear_filters()
-        self._refresh()
+        if self._date_from_checkbox.isChecked():
+            # Ya estaba marcado: forzar el recálculo, que si no sólo lo
+            # dispara el toggled de arriba.
+            self._on_filters_changed()
+        else:
+            self._date_from_checkbox.setChecked(True)
 
     def _on_filters_changed(self):
         self._presenter.set_product_query(self._product_filter_edit.text().strip())

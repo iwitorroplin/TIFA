@@ -130,7 +130,6 @@ class SteriflowDataPresenter:
             self.autoclave_label(cycle),
             cycle.started_at.strftime("%d/%m/%Y %H:%M:%S"),
             cycle.product,
-            cycle.batch,
             cycle.cycle_number,
             self.phase_label(cycle),
             _format_duration(cycle.sterilization_duration_s),

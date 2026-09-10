@@ -18,36 +18,46 @@ auto_enabled: false
 # hace falta escribirlo cuando NO coincide con code, como en la AUTOCLAVE8,
 # que imprime 10 por un error historico que no se puede corregir en los
 # informes ya emitidos.
+local_root: C:\Report_MPI
+server_root: R:\TRAZABILIDAD\backup_TIFA
+execution_hours:
+- 00:00
+- 05:00
+- 08:00
+- '12:00'
+- '16:00'
+- '20:00'
+auto_enabled: true
 autoclaves:
-  - name: AUTOCLAVE6
-    ip: "10.109.1.191"
-    code: 6
-    report_code: 6
-    path_folder: '\\AUTOCLAVE6\Export'
-    local_folder: 'data/steriflow/local/AUTOCLAVE6'
-    backup_folder: '\\SERVIDOR\Backups\AUTOCLAVE6'
-    active: true
-  - name: AUTOCLAVE7
-    ip: "10.109.1.192"
-    code: 7
-    report_code: 7
-    path_folder: '\\AUTOCLAVE7\Export'
-    local_folder: 'data/steriflow/local/AUTOCLAVE7'
-    backup_folder: '\\SERVIDOR\Backups\AUTOCLAVE7'
-    active: true
-  - name: AUTOCLAVE8
-    ip: "10.109.1.189"
-    code: 8
-    report_code: 10
-    path_folder: '\\AUTOCLAVE8\Export'
-    local_folder: 'data/steriflow/local/AUTOCLAVE8'
-    backup_folder: '\\SERVIDOR\Backups\AUTOCLAVE8'
-    active: true
-  - name: AUTOCLAVE9
-    ip: "10.109.1.133"
-    code: 9
-    report_code: 9
-    path_folder: '\\AUTOCLAVE9\Export'
-    local_folder: 'data/steriflow/local/AUTOCLAVE9'
-    backup_folder: '\\SERVIDOR\Backups\AUTOCLAVE9'
-    active: true
+- name: AUTOCLAVE6
+  ip: 10.109.1.191
+  code: 6
+  report_code: 6
+  path_folder: \\AUTOCLAVE6\Export
+  local_folder: C:/Report_MPI/AUTOCLAVE6
+  backup_folder: R:/TRAZABILIDAD/backup_TIFA/AUTOCLAVE6
+  active: true
+- name: AUTOCLAVE7
+  ip: 10.109.1.192
+  code: 7
+  report_code: 7
+  path_folder: \\AUTOCLAVE7\Export
+  local_folder: C:/Report_MPI/AUTOCLAVE7
+  backup_folder: R:/TRAZABILIDAD/backup_TIFA/AUTOCLAVE7
+  active: true
+- name: AUTOCLAVE8
+  ip: 10.109.1.189
+  code: 8
+  report_code: 10
+  path_folder: \\AUTOCLAVE8\Export
+  local_folder: C:/Report_MPI/AUTOCLAVE8
+  backup_folder: R:/TRAZABILIDAD/backup_TIFA/AUTOCLAVE8
+  active: true
+- name: AUTOCLAVE9
+  ip: 10.109.1.133
+  code: 9
+  report_code: 9
+  path_folder: \\AUTOCLAVE9\Export
+  local_folder: C:/Report_MPI/AUTOCLAVE9
+  backup_folder: R:/TRAZABILIDAD/backup_TIFA/AUTOCLAVE9
+  active: true
