@@ -44,6 +44,23 @@ class SteriflowDataPresenter:
         self._filters = dataclasses.replace(self._filters, product_query=text or None)
         self._page_index = 0
 
+    def set_autoclave_code(self, code: int | None) -> None:
+        self._filters = dataclasses.replace(self._filters, autoclave_code=code)
+        self._page_index = 0
+
+    def set_by_autoclave(self, by_autoclave: bool) -> None:
+        """Ordenar agrupando por máquina. Vuelve a la primera página igual que
+        un filtro: con otro orden, la página en la que estabas ya no contiene
+        las mismas filas."""
+        self._filters = dataclasses.replace(self._filters, by_autoclave=by_autoclave)
+        self._page_index = 0
+
+    def autoclaves(self) -> list[tuple[str, int]]:
+        """(nombre, código) de las autoclaves configuradas, para el filtro. Se
+        leen de la configuración y no de los ciclos guardados: una autoclave
+        recién dada de alta también tiene que poder elegirse."""
+        return [(a.name, a.code) for a in load_settings().autoclaves]
+
     def set_date_range(self, date_from: dt.date | None, date_to: dt.date | None) -> None:
         self._filters = dataclasses.replace(self._filters, date_from=date_from, date_to=date_to)
         self._page_index = 0
@@ -110,17 +127,41 @@ class SteriflowDataPresenter:
 
     def row_cells(self, cycle: SterilizationCycle) -> list[str]:
         return [
-            str(cycle.autoclave_code),
+            self.autoclave_label(cycle),
             cycle.started_at.strftime("%d/%m/%Y %H:%M:%S"),
             cycle.product,
             cycle.batch,
             cycle.cycle_number,
+            self.phase_label(cycle),
             _format_duration(cycle.sterilization_duration_s),
             _format_temp(cycle.sterilization_temp_mean_c),
             _format_temp(cycle.sterilization_temp_min_c),
             _format_temp(cycle.sterilization_temp_max_c),
             "Revisar" if cycle.needs_review else "",
         ]
+
+    def autoclave_label(self, cycle: SterilizationCycle) -> str:
+        """El nombre configurado de la máquina. Los ciclos guardados antes de
+        que se guardara ese nombre solo tienen el número, así que se compone
+        uno con la misma forma en vez de dejar la celda vacía."""
+        return cycle.autoclave or f"AUTOCLAVE{cycle.autoclave_code}"
+
+    def autoclave_tooltip(self, cycle: SterilizationCycle) -> str:
+        """Qué número imprime el informe, cuando no es el de la máquina: es lo
+        que explica que un PDF llamado MPI_10_* salga aquí como AUTOCLAVE8."""
+        if cycle.reported_code is None or cycle.reported_code == cycle.autoclave_code:
+            return ""
+        return f"El informe imprime «Cód. Autoclave {cycle.reported_code}»"
+
+    def phase_label(self, cycle: SterilizationCycle) -> str:
+        """Qué fase del informe se leyó como esterilización. Cambia según el
+        programa (ver `logic/sterilization/reader.py`), así que verla en la
+        tabla es lo que permite revisar un ciclo raro sin abrir el PDF."""
+        if cycle.sterilization_phase_number is None:
+            return "—"
+        if not cycle.sterilization_phase_type:
+            return str(cycle.sterilization_phase_number)
+        return f"{cycle.sterilization_phase_number} · {cycle.sterilization_phase_type}"
 
     def print_cells(self, cycle: SterilizationCycle) -> list[str]:
         cells = self.row_cells(cycle)

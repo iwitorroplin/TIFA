@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLineEdit,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QTimeEdit,
@@ -19,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.modules.steriflow.logic.controller import SteriflowController
-from src.modules.steriflow.logic.config import AutoclaveConfig
+from src.modules.steriflow.logic.config import AutoclaveConfig, default_autoclave_code
 from src.modules.steriflow.logic.logs import agent_logger
 from src.modules.steriflow.logic.network import MachineStatus
 from src.modules.steriflow.logic.settings_editor import SaveStatus, SettingsIssue, validate_autoclave
@@ -43,11 +44,12 @@ from src.modules.steriflow.tasks.status_checker import AutoclaveStatusChecker
 # interpreta como "inactivo" en silencio.
 _COL_NAME = 0
 _COL_IP = 1
-_COL_PATH = 2
-_COL_LOCAL = 3
-_COL_BACKUP = 4
-_COL_ACTIVE = 5
-_COL_STATUS = 6
+_COL_CODE = 2
+_COL_PATH = 3
+_COL_LOCAL = 4
+_COL_BACKUP = 5
+_COL_ACTIVE = 6
+_COL_STATUS = 7
 
 # La etiqueta de cada estado la da catalog.machine_status_label (compartida
 # con el resumen de conectividad de home_page); el icono es decoración pura,
@@ -145,9 +147,10 @@ class SteriflowConfigPage(QWidget):
     def _build_autoclaves_group(self):
         group = QGroupBox("Autoclaves")
 
-        self._autoclaves_table = QTableWidget(0, 7)
+        self._autoclaves_table = QTableWidget(0, 8)
         self._autoclaves_table.setHorizontalHeaderLabels(
-            ["Nombre", "IP", "Carpeta origen", "Carpeta local", "Carpeta backup", "Activo", "Estado"]
+            ["Nombre", "IP", "Código", "Carpeta origen", "Carpeta local", "Carpeta backup",
+             "Activo", "Estado"]
         )
         self._autoclaves_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.ResizeToContents
@@ -209,6 +212,8 @@ class SteriflowConfigPage(QWidget):
             self,
             name=autoclave.name,
             ip=autoclave.ip,
+            code=autoclave.code,
+            report_code=autoclave.report_code,
             path_folder=autoclave.path_folder,
             local_folder=autoclave.local_folder,
             backup_folder=autoclave.backup_folder,
@@ -310,6 +315,20 @@ class SteriflowConfigPage(QWidget):
         table = self._autoclaves_table
         table.setItem(row, _COL_NAME, QTableWidgetItem(autoclave.name))
         table.setItem(row, _COL_IP, QTableWidgetItem(autoclave.ip))
+
+        # Los dos números en una sola celda, y solo cuando difieren: que la
+        # máquina imprima otro código es la excepción, no la norma, y merece
+        # verse de un vistazo justo donde se configura.
+        code_item = QTableWidgetItem(
+            str(autoclave.code)
+            if autoclave.report_code == autoclave.code
+            else f"{autoclave.code} (informa {autoclave.report_code})"
+        )
+        code_item.setToolTip(
+            "Código real de la autoclave y, entre paréntesis, el que imprime "
+            "en sus informes cuando no coincide."
+        )
+        table.setItem(row, _COL_CODE, code_item)
 
         path_item = QTableWidgetItem(autoclave.path_folder)
         path_item.setToolTip(autoclave.path_folder)
@@ -428,10 +447,16 @@ class SteriflowConfigPage(QWidget):
 
 
 def _autoclave_from_dialog(dialog: "_AutoclaveDialog") -> AutoclaveConfig:
-    name, ip, path_folder, local_folder, backup_folder, active = dialog.values()
+    name, ip, code, report_code, path_folder, local_folder, backup_folder, active = dialog.values()
+    # Un alta nueva llega con los códigos a 0 (el spin arranca vacío): se
+    # deducen del nombre, igual que hace `load_settings` con un yaml antiguo,
+    # en vez de guardar una autoclave con código 0.
+    code = code or default_autoclave_code(name)
     return AutoclaveConfig(
         name=name,
         ip=ip,
+        code=code,
+        report_code=report_code or code,
         path_folder=path_folder,
         local_folder=local_folder,
         backup_folder=backup_folder,
@@ -445,6 +470,8 @@ class _AutoclaveDialog(QDialog):
         parent=None,
         name="",
         ip="",
+        code=0,
+        report_code=0,
         path_folder="",
         local_folder="",
         backup_folder="",
@@ -455,6 +482,22 @@ class _AutoclaveDialog(QDialog):
 
         self._name_edit = QLineEdit(name)
         self._ip_edit = QLineEdit(ip)
+
+        self._code_spin = QSpinBox()
+        self._code_spin.setRange(0, 99)
+        self._code_spin.setValue(code)
+        self._code_spin.setToolTip(
+            "El número real de esta autoclave. Es el que se guarda con cada ciclo."
+        )
+
+        self._report_code_spin = QSpinBox()
+        self._report_code_spin.setRange(0, 99)
+        self._report_code_spin.setValue(report_code or code)
+        self._report_code_spin.setToolTip(
+            "El número que esta máquina imprime en sus PDF ('Cód. Autoclave').\n"
+            "Normalmente es el mismo; la AUTOCLAVE8 imprime 10 por un error\n"
+            "histórico que no se puede corregir en los informes ya emitidos."
+        )
 
         self._path_folder_edit = QLineEdit(path_folder)
         self._path_folder_edit.setPlaceholderText(r"\\AUTOCLAVE6\Export")
@@ -477,6 +520,8 @@ class _AutoclaveDialog(QDialog):
         form_layout = QFormLayout()
         form_layout.addRow("Nombre:", self._name_edit)
         form_layout.addRow("IP:", self._ip_edit)
+        form_layout.addRow("Código real:", self._code_spin)
+        form_layout.addRow("Código que imprime en el PDF:", self._report_code_spin)
         form_layout.addRow("Carpeta origen (UNC):", path_row)
         form_layout.addRow("Carpeta local:", local_row)
         form_layout.addRow("Carpeta de backup (servidor):", backup_row)
@@ -525,6 +570,8 @@ class _AutoclaveDialog(QDialog):
         return (
             self._name_edit.text(),
             self._ip_edit.text(),
+            self._code_spin.value(),
+            self._report_code_spin.value(),
             self._path_folder_edit.text().strip(),
             self._local_folder_edit.text().strip(),
             self._backup_folder_edit.text().strip(),

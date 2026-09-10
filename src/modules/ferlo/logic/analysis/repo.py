@@ -53,7 +53,7 @@ def existing_program_code(
 
 def load_program(conn: sqlite3.Connection, code: int) -> SterilizationProgram | None:
     fila = conn.execute(
-        "SELECT code, name, target_temperature_c, target_time_min, is_active"
+        "SELECT code, name, format, target_temperature_c, target_time_min, is_active"
         " FROM ferlo_program WHERE code = ?",
         (code,),
     ).fetchone()
@@ -64,6 +64,7 @@ def program_from_row(fila: sqlite3.Row) -> SterilizationProgram:
     return SterilizationProgram(
         code=fila["code"],
         name=fila["name"] or "",
+        format=fila["format"] or "",
         target_temperature_c=fila["target_temperature_c"],
         target_time_min=fila["target_time_min"],
         is_active=bool(fila["is_active"]),
@@ -77,9 +78,13 @@ def save_cycle(conn: sqlite3.Connection, machine: str, serie: Series, cycle: Cyc
         (machine, to_iso(cycle.start_ts)),
     ).fetchone()
 
+    fase = cycle.sterilization
     calculados = (
         to_iso(cycle.end_ts), cycle.measured_setpoint_c, cycle.peak_temperature_c,
-        cycle.evaluation_setpoint_c, cycle.mean_temperature_c,
+        cycle.evaluation_setpoint_c,
+        to_iso(fase.start_ts) if fase else None,
+        to_iso(fase.end_ts) if fase else None,
+        cycle.mean_temperature_c,
         cycle.mean_stable_temperature_c, cycle.temperature_min_c, cycle.temperature_max_c,
         cycle.time_below_setpoint_min, cycle.time_deviation_min, cycle.extra_time_min,
         cycle.coverage_pct, cycle.max_blind_window_s, cycle.uncovered_min,
@@ -91,7 +96,8 @@ def save_cycle(conn: sqlite3.Connection, machine: str, serie: Series, cycle: Cyc
         conn.execute(
             "UPDATE ferlo_cycle SET"
             " ended_at=?, measured_setpoint_c=?, peak_temperature_c=?,"
-            " evaluation_setpoint_c=?, mean_temperature_c=?, mean_stable_temperature_c=?,"
+            " evaluation_setpoint_c=?, sterilization_start_ts=?, sterilization_end_ts=?,"
+            " mean_temperature_c=?, mean_stable_temperature_c=?,"
             " temperature_min_c=?, temperature_max_c=?, time_below_setpoint_min=?,"
             " time_deviation_min=?, extra_time_min=?, coverage_pct=?, max_blind_window_s=?,"
             " uncovered_min=?, status=?, thresholds_json=?, imported_at=?"
@@ -103,16 +109,20 @@ def save_cycle(conn: sqlite3.Connection, machine: str, serie: Series, cycle: Cyc
             "INSERT INTO ferlo_cycle("
             " machine, started_at, ended_at, measured_setpoint_c, peak_temperature_c,"
             " evaluation_setpoint_c, program_code, target_temperature_c, target_time_min,"
+            " sterilization_start_ts, sterilization_end_ts,"
             " mean_temperature_c, mean_stable_temperature_c, temperature_min_c,"
             " temperature_max_c, time_below_setpoint_min, time_deviation_min, extra_time_min,"
             " coverage_pct, max_blind_window_s, uncovered_min, status, manual_verdict,"
             " thresholds_json, imported_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'none', ?, ?)",
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
+            " 'none', ?, ?)",
             (
                 machine, to_iso(cycle.start_ts), to_iso(cycle.end_ts),
                 cycle.measured_setpoint_c, cycle.peak_temperature_c,
                 cycle.evaluation_setpoint_c, cycle.program_code,
                 cycle.target_temperature_c, cycle.target_time_min,
+                to_iso(fase.start_ts) if fase else None,
+                to_iso(fase.end_ts) if fase else None,
                 cycle.mean_temperature_c, cycle.mean_stable_temperature_c,
                 cycle.temperature_min_c, cycle.temperature_max_c,
                 cycle.time_below_setpoint_min, cycle.time_deviation_min, cycle.extra_time_min,
@@ -191,6 +201,8 @@ class CycleRow:
     program_name: str
     target_temperature_c: float | None
     target_time_min: float | None
+    sterilization_start_ts: dt.datetime | None
+    sterilization_end_ts: dt.datetime | None
     mean_temperature_c: float | None
     mean_stable_temperature_c: float | None
     time_below_setpoint_min: float | None
@@ -203,14 +215,24 @@ class CycleRow:
 
     @property
     def duration_min(self) -> float:
-        """Duracion total del ciclo (calentamiento + esterilizacion +
-        enfriamiento). La duracion de solo la fase de esterilizacion no se
-        guarda como columna aparte; se deriva de `target_time_min` +
-        `time_deviation_min` cuando hay programa asignado."""
+        """Duracion total del ciclo: calentamiento + esterilizacion +
+        enfriamiento, de punta a punta."""
         return (self.ended_at - self.started_at).total_seconds() / 60.0
 
     @property
     def sterilization_duration_min(self) -> float | None:
+        """Duracion de la meseta, que es lo que dura la esterilizacion de
+        verdad -bastante menos que el ciclo entero: 73,6 min frente a 96,8 en
+        un ciclo real de Ferlo1-.
+
+        Sale de las marcas de la propia fase, disponibles tenga o no programa
+        asignado. La formula vieja (`target_time_min` + `time_deviation_min`)
+        se conserva como reserva para los ciclos guardados antes de que
+        existieran esas dos columnas, que las tienen a NULL hasta que se
+        reimporten.
+        """
+        if self.sterilization_start_ts is not None and self.sterilization_end_ts is not None:
+            return (self.sterilization_end_ts - self.sterilization_start_ts).total_seconds() / 60.0
         if self.target_time_min is None or self.time_deviation_min is None:
             return None
         return self.target_time_min + self.time_deviation_min
@@ -236,6 +258,8 @@ def _cycle_row(fila: sqlite3.Row) -> CycleRow:
         program_name=fila["program_name"] or "",
         target_temperature_c=fila["target_temperature_c"],
         target_time_min=fila["target_time_min"],
+        sterilization_start_ts=from_iso(fila["sterilization_start_ts"]),
+        sterilization_end_ts=from_iso(fila["sterilization_end_ts"]),
         mean_temperature_c=fila["mean_temperature_c"],
         mean_stable_temperature_c=fila["mean_stable_temperature_c"],
         time_below_setpoint_min=fila["time_below_setpoint_min"],

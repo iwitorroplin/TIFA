@@ -22,7 +22,7 @@ from src.modules.ferlo.logic.config import DEFAULT_SETTINGS, Settings
 from src.modules.ferlo.logic.ingest import archive
 from src.modules.ferlo.logic.ingest.normalize import build_series
 from src.modules.ferlo.logic.ingest.reader import RawRow, read_raw_rows
-from src.modules.ferlo.logic.ingest.service import reassign_program
+from src.modules.ferlo.logic.ingest.service import reassign_program, reassign_programs
 from src.modules.ferlo.logic.schema import ensure_tables
 
 MACHINE = "F2"
@@ -126,6 +126,85 @@ def test_reassign_program_no_pisa_el_veredicto_manual(conn, settings):
 
 def test_reassign_program_sin_mensual_devuelve_none(conn, settings):
     assert reassign_program(conn, settings, MACHINE, INICIO, program_code=1) is None
+
+
+def test_duracion_de_esterilizacion_se_guarda_aunque_no_haya_programa(conn, settings):
+    """La fase se detecta con la consigna medida cuando el ciclo no tiene
+    programa (ver `analysis/service.py:assign`), así que su duración real -la
+    meseta, no el ciclo entero- se puede mostrar desde el primer momento, sin
+    derivarla de `target_time_min`."""
+    start_ts = _archivar_ciclo_tipico(settings)
+    reassign_program(conn, settings, MACHINE, start_ts, program_code=None)
+
+    fila = analysis_repo.list_cycles(conn, limit=1)[0]
+
+    assert fila.program_code is None
+    assert fila.sterilization_start_ts is not None
+    assert fila.sterilization_end_ts is not None
+    # La meseta dura 73 min; el ciclo entero, con rampa y bajada, bastante más.
+    assert fila.sterilization_duration_min == pytest.approx(73.0, abs=0.5)
+    assert fila.duration_min > fila.sterilization_duration_min + 2
+
+
+# --- asignación en bloque desde la pestaña de Ciclos ---
+
+
+def _archivar_dos_ciclos(settings: Settings) -> list[dt.datetime]:
+    """Dos ciclos del mismo mes, para poder comprobar que el mensual se relee
+    una sola vez y que los dos quedan asignados."""
+    inicios = []
+    for dia in (1, 2):
+        arranque = INICIO.replace(day=dia)
+        valores = (
+            [40.0 + i * 3.85 for i in range(20)]
+            + [117.0] * 876
+            + [40.0 + (20 - i) * 3.85 for i in range(20)]
+        )
+        filas = [_fila(arranque + dt.timedelta(seconds=i * 5), v) for i, v in enumerate(valores)]
+        ruta = archive.append_rows(settings.archivo_dir, MACHINE, arranque.year, arranque.month, filas)
+        inicios.append(ruta)
+
+    rows = read_raw_rows(inicios[-1])
+    serie = build_series(MACHINE, inicios[-1].name, rows)
+    return [c.start_ts for c in segment(serie, settings)]
+
+
+def test_reassign_programs_asigna_toda_la_seleccion(conn, settings):
+    inicios = _archivar_dos_ciclos(settings)
+    assert len(inicios) == 2
+
+    reasignados = reassign_programs(
+        conn, settings, [(MACHINE, ts) for ts in inicios], program_code=1
+    )
+
+    assert reasignados == 2
+    filas = analysis_repo.list_cycles(conn, limit=10)
+    assert [f.program_code for f in filas] == [1, 1]
+    assert all(f.status is CycleStatus.OK for f in filas)
+
+
+def test_reassign_programs_cuenta_solo_los_que_existen(conn, settings):
+    """Un instante que ya no sale al volver a segmentar no cuenta como
+    reasignado: es lo que deja ver en pantalla que la selección no se aplicó
+    entera."""
+    inicios = _archivar_dos_ciclos(settings)
+    fantasma = INICIO + dt.timedelta(days=20)
+
+    reasignados = reassign_programs(
+        conn, settings, [(MACHINE, inicios[0]), (MACHINE, fantasma)], program_code=1
+    )
+
+    assert reasignados == 1
+
+
+def test_reassign_programs_con_none_desasigna_toda_la_seleccion(conn, settings):
+    inicios = _archivar_dos_ciclos(settings)
+    reassign_programs(conn, settings, [(MACHINE, ts) for ts in inicios], program_code=1)
+
+    reassign_programs(conn, settings, [(MACHINE, ts) for ts in inicios], program_code=None)
+
+    filas = analysis_repo.list_cycles(conn, limit=10)
+    assert [f.program_code for f in filas] == [None, None]
 
 
 def test_reassign_program_ciclo_inexistente_devuelve_none(conn, settings):

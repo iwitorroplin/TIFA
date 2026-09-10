@@ -13,27 +13,40 @@ execution_hours: [
 
 auto_enabled: false
 
+# code: numero real de la autoclave, el que se guarda con cada ciclo.
+# report_code: el que la maquina imprime en sus PDF ("Cod. Autoclave"). Solo
+# hace falta escribirlo cuando NO coincide con code, como en la AUTOCLAVE8,
+# que imprime 10 por un error historico que no se puede corregir en los
+# informes ya emitidos.
 autoclaves:
   - name: AUTOCLAVE6
     ip: "10.109.1.191"
+    code: 6
+    report_code: 6
     path_folder: '\\AUTOCLAVE6\Export'
     local_folder: 'data/steriflow/local/AUTOCLAVE6'
     backup_folder: '\\SERVIDOR\Backups\AUTOCLAVE6'
     active: true
   - name: AUTOCLAVE7
     ip: "10.109.1.192"
+    code: 7
+    report_code: 7
     path_folder: '\\AUTOCLAVE7\Export'
     local_folder: 'data/steriflow/local/AUTOCLAVE7'
     backup_folder: '\\SERVIDOR\Backups\AUTOCLAVE7'
     active: true
   - name: AUTOCLAVE8
     ip: "10.109.1.189"
+    code: 8
+    report_code: 10
     path_folder: '\\AUTOCLAVE8\Export'
     local_folder: 'data/steriflow/local/AUTOCLAVE8'
     backup_folder: '\\SERVIDOR\Backups\AUTOCLAVE8'
     active: true
   - name: AUTOCLAVE9
     ip: "10.109.1.133"
+    code: 9
+    report_code: 9
     path_folder: '\\AUTOCLAVE9\Export'
     local_folder: 'data/steriflow/local/AUTOCLAVE9'
     backup_folder: '\\SERVIDOR\Backups\AUTOCLAVE9'

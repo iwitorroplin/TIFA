@@ -17,6 +17,14 @@ from src.modules.ferlo.messages import catalog
 
 DEFAULT_PAGE_SIZE = 50
 
+# Qué guarda el combo de programa cuando lo elegido es "sin asignar". Un
+# centinela y no None: `QComboBox.currentData()` ya devuelve None cuando el
+# combo está vacío, así que con None no se distinguiría "quitar el programa"
+# de "no hay nada elegido". Vive aquí, y no en una de las dos pantallas que lo
+# usan (la tabla de ciclos y el diálogo de detalle), para que ninguna tenga
+# que importar el interior de la otra.
+UNASSIGNED_PROGRAM = object()
+
 
 def _fmt_temp(value: float | None) -> str:
     return "—" if value is None else f"{value:.2f}"
@@ -101,10 +109,15 @@ class FerloDataPresenter:
     # --- formateo: las columnas que pinta la tabla ---
 
     def row_cells(self, cycle: CycleRow) -> list[str]:
+        # Las dos duraciones, y la de esterilización primero: es la que se
+        # mira. Antes solo estaba la del ciclo entero bajo el rótulo
+        # "Duración", que se leía como si fuera la de la esterilización y es
+        # casi un 30 % mayor.
         return [
             cycle.machine,
             cycle.started_at.strftime("%d/%m/%Y %H:%M:%S"),
             f"{cycle.program_code:02d} · {cycle.program_name}" if cycle.program_code else "—",
+            _fmt_min(cycle.sterilization_duration_min),
             _fmt_min(cycle.duration_min),
             _fmt_temp(cycle.mean_temperature_c),
             _fmt_temp(cycle.mean_stable_temperature_c),

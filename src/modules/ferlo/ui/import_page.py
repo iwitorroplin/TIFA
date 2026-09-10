@@ -160,6 +160,12 @@ class FerloImportPage(QWidget):
         push(Module.FERLO, catalog.import_failed(machine, error))
 
     def _render_summary(self, machine: str, summary: ImportSummary):
+        restos = (
+            f" · {summary.leftovers_removed} fichero(s) sobrante(s) retirados de la entrada"
+            if summary.leftovers_removed
+            else ""
+        )
+
         self._results_table.setRowCount(0)
         for arrival in summary.arrivals:
             row = self._results_table.rowCount()
@@ -172,7 +178,9 @@ class FerloImportPage(QWidget):
             )
 
         if not summary.arrivals:
-            self._summary_label.setText(f"{machine}: nada pendiente en la carpeta de entrada.")
+            self._summary_label.setText(
+                f"{machine}: nada pendiente en la carpeta de entrada.{restos}"
+            )
             return
 
         meses = ", ".join(
@@ -183,6 +191,7 @@ class FerloImportPage(QWidget):
             f"{machine}: {summary.total_new_rows} fila(s) nueva(s) · "
             f"{summary.total_cycles} ciclo(s) analizado(s)"
             + (f" · meses tocados: {meses}" if meses else "")
+            + restos
         )
 
     @staticmethod

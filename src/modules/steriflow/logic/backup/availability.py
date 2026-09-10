@@ -22,6 +22,7 @@ from src.modules.steriflow.logic.backup.reports import new_reports
 from src.modules.steriflow.logic.config import AutoclaveConfig, SteriflowSettings
 from src.modules.steriflow.logic.network import MachineStatus, check_machine_status
 from src.shared.logs.logger import Logger
+from src.shared.messages.types import MessageType
 
 # Media hora: lo bastante fino para ver cuándo se cayó una autoclave y lo
 # bastante espaciado para no llenar el log ni estar pingando todo el rato.
@@ -57,17 +58,34 @@ class AutoclaveAvailability:
     def has_new_data(self) -> bool:
         return bool(self.pending_fetch) or bool(self.pending_backup)
 
+    @property
+    def todo_comprobado(self) -> bool:
+        """Si se pudieron mirar las dos carpetas. Un None no es un cero: con
+        una carpeta que no se dejó leer no se puede afirmar que no haya nada
+        pendiente."""
+        return self.pending_fetch is not None and self.pending_backup is not None
+
     def describe(self) -> str:
-        """La línea tal cual va al log."""
+        """La línea tal cual va al log, sin el nombre de la autoclave: lo pone
+        el ámbito del logger (ver `log_availability`)."""
         partes = [_STATUS_TEXT[self.status]]
 
-        if self.is_available and not self.has_new_data and self.pending_fetch is not None:
+        if self.is_available and not self.has_new_data and self.todo_comprobado:
             partes.append("sin datos nuevos, no hace falta backup")
         else:
             partes.append(_pending_text("por traer de la máquina", self.pending_fetch))
             partes.append(_pending_text("por replicar al servidor", self.pending_backup))
 
-        return f"[{self.name}] {' · '.join(partes)}"
+        return " · ".join(partes)
+
+    @property
+    def level(self) -> MessageType:
+        """Con qué nivel se anota esta comprobación: una máquina que no
+        responde, o una carpeta que no se dejó mirar, no puede quedar como una
+        línea informativa más entre cientos."""
+        if not self.is_available or not self.todo_comprobado:
+            return MessageType.WARNING
+        return MessageType.INFO
 
 
 def _pending_text(what: str, value: int | None) -> str:
@@ -115,11 +133,11 @@ def log_availability(settings: SteriflowSettings, logger: Logger, reason: str) -
 
     resultados = check_all(settings)
     if not resultados:
-        logger.log("No hay ninguna autoclave activa que comprobar")
+        logger.log("No hay ninguna autoclave activa que comprobar", level=MessageType.WARNING)
         return resultados
 
     for resultado in resultados:
-        logger.log(resultado.describe())
+        logger.scoped(resultado.name).log(resultado.describe(), level=resultado.level)
     return resultados
 
 
@@ -152,7 +170,10 @@ class AvailabilityMonitor:
             except Exception as ex:
                 # Un fallo comprobando no puede matar el hilo: se anota y se
                 # espera a la siguiente ronda.
-                self._logger.log(f"ERROR comprobando la disponibilidad de las autoclaves: {ex}")
+                self._logger.log(
+                    f"No se pudo comprobar la disponibilidad de las autoclaves: {ex}",
+                    level=MessageType.ERROR,
+                )
 
             if self._stop_event.wait(self._interval_s):
                 break

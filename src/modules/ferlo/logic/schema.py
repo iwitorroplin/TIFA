@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import sqlite3
 
+from src.shared.db.migrate import add_column_if_missing
+
 DDL = """
 CREATE TABLE IF NOT EXISTS ferlo_import (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,6 +47,9 @@ CREATE INDEX IF NOT EXISTS ix_ferlo_import_machine ON ferlo_import(machine, from
 CREATE TABLE IF NOT EXISTS ferlo_program (
     code               INTEGER PRIMARY KEY,
     name               TEXT    NOT NULL DEFAULT '',
+    -- Formato del envase ("1/2 kg", "3 kg"...). Texto libre: en planta se
+    -- nombra con fraccion y unidad juntas, no como un numero.
+    format             TEXT    NOT NULL DEFAULT '',
     target_temperature_c REAL NOT NULL,
     target_time_min    REAL    NOT NULL,
     is_active          INTEGER NOT NULL DEFAULT 1
@@ -66,6 +71,13 @@ CREATE TABLE IF NOT EXISTS ferlo_cycle (
     program_code              INTEGER REFERENCES ferlo_program(code),
     target_temperature_c      REAL,
     target_time_min           REAL,
+
+    -- Inicio y fin de la fase de esterilizacion (la meseta). Se guardan
+    -- aunque el ciclo no tenga programa asignado -la fase se detecta con la
+    -- consigna medida, ver logic/analysis/service.py:assign-, que es lo que
+    -- permite mostrar su duracion real sin derivarla de target_time_min.
+    sterilization_start_ts    TEXT,
+    sterilization_end_ts      TEXT,
 
     mean_temperature_c        REAL,
     mean_stable_temperature_c REAL,
@@ -120,6 +132,36 @@ CREATE INDEX IF NOT EXISTS ix_ferlo_incident_cycle ON ferlo_incident(cycle_id);
 """
 
 
+# Columnas que llegaron despues de la primera version de estas tablas. Ya
+# estan en el DDL de arriba (instalacion nueva) y se anaden aqui a la tabla que
+# ya existia, que el CREATE TABLE IF NOT EXISTS no toca. Ver
+# `src/shared/db/migrate.py`.
+_COLUMNAS_ANADIDAS = (
+    ("ferlo_program", "format", "TEXT NOT NULL DEFAULT ''"),
+    ("ferlo_cycle", "sterilization_start_ts", "TEXT"),
+    ("ferlo_cycle", "sterilization_end_ts", "TEXT"),
+)
+
+
+# Fila centinela del programa 0 ("Manual"): el codigo que lleva un ciclo cuya
+# consigna tecleo una persona en vez de elegirla de la lista. Tiene que
+# EXISTIR porque `ferlo_cycle.program_code` es clave ajena contra esta tabla y
+# las FK estan activas (ver `src/shared/db/connection.py`), pero sus valores
+# de consigna no los lee nadie: cada ciclo manual guarda los suyos en
+# `ferlo_cycle.target_temperature_c/target_time_min` -ver
+# `logic/analysis/programs.py:manual_program`-. Queda inactiva para que no
+# aparezca como opcion elegible ni la sugiera `suggest_programs`.
+_MANUAL_PROGRAM_DDL = """
+INSERT INTO ferlo_program (code, name, format, target_temperature_c, target_time_min, is_active)
+VALUES (0, 'Manual', '', 0, 0, 0)
+ON CONFLICT(code) DO NOTHING;
+"""
+
+
 def ensure_tables(conn: sqlite3.Connection) -> None:
-    """Crea las tablas de Ferlo si faltan. Idempotente (D8)."""
+    """Crea las tablas de Ferlo si faltan y anade las columnas nuevas a las que
+    ya existian. Idempotente (D8)."""
     conn.executescript(DDL)
+    for tabla, columna, definicion in _COLUMNAS_ANADIDAS:
+        add_column_if_missing(conn, tabla, columna, definicion)
+    conn.executescript(_MANUAL_PROGRAM_DDL)

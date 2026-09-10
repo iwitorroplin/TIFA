@@ -1,25 +1,33 @@
 """Tablas de Steriflow en la base de datos compartida.
 
 Sin ninguna clave ajena contra las de Ferlo, Macona o Pasteurización:
-`steriflow_cycle.autoclave_code` es el número que imprime la máquina (6..9),
-no un id de otra tabla. Los cuatro módulos conviven en el mismo fichero
-SQLite pero no se tocan entre sí.
+`steriflow_cycle.autoclave_code` es el número real de la autoclave (6..9), no
+un id de otra tabla. Los cuatro módulos conviven en el mismo fichero SQLite
+pero no se tocan entre sí.
 
 Identidad de un ciclo: (autoclave_code, started_at). El sha256 del fichero NO
 sirve como clave -la máquina puede reimprimir el mismo ciclo y producir un PDF
-distinto byte a byte-, pero se guarda para saber si el fichero cambió.
+distinto byte a byte-, pero se guarda para saber si el fichero cambió. Ese
+código lo pone la configuración a partir de la carpeta de origen, no el PDF:
+la AUTOCLAVE8 imprime 10 en sus informes y, tomándolo del PDF, dos máquinas
+distintas podrían compartir código y pisarse los ciclos (ver
+`logic/config.py:AutoclaveConfig` y `logic/sterilization/service.py`).
 
-De las seis fases que trae cada informe solo importa la 3 (esterilización), así
-que sus datos van aplanados directamente en `steriflow_cycle` en vez de en una
-tabla de fases aparte: no hay nada que normalizar para una sola fase por ciclo.
-Si esa fase no se puede leer bien -o no se puede leer en absoluto- el ciclo se
-guarda igual, con lo que sí se pudo extraer y `needs_review` a 1: el operario lo
-revisa a mano en vez de que el dato desaparezca en silencio.
+De todas las fases que trae cada informe solo importa la de esterilización,
+así que sus datos van aplanados directamente en `steriflow_cycle` en vez de en
+una tabla de fases aparte: no hay nada que normalizar para una sola fase por
+ciclo. Cuál es esa fase cambia con el programa, y por eso se guarda también su
+número y su tipo (ver `logic/sterilization/reader.py`). Si la fase no se puede
+leer bien -o no se puede leer en absoluto- el ciclo se guarda igual, con lo que
+sí se pudo extraer y `needs_review` a 1: el operario lo revisa a mano en vez de
+que el dato desaparezca en silencio.
 """
 
 from __future__ import annotations
 
 import sqlite3
+
+from src.shared.db.migrate import add_column_if_missing
 
 DDL = """
 -- Qué PDF ya ha completado el backup a servidor, para no volver a
@@ -50,7 +58,13 @@ CREATE INDEX IF NOT EXISTS ix_sf_backup_file_pendientes
 
 CREATE TABLE IF NOT EXISTS steriflow_cycle (
     id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- Número real de la autoclave, puesto por la configuración.
     autoclave_code            INTEGER NOT NULL,
+    -- Nombre configurado de esa autoclave ("AUTOCLAVE8"): es como se muestra
+    -- y se filtra en la pestaña de Datos.
+    autoclave                 TEXT    NOT NULL DEFAULT '',
+    -- El número que el propio informe imprime, que puede no coincidir.
+    reported_code             INTEGER,
     started_at                TEXT    NOT NULL,
     cycle_number              TEXT    NOT NULL DEFAULT '',
     product                   TEXT    NOT NULL DEFAULT '',
@@ -60,8 +74,13 @@ CREATE TABLE IF NOT EXISTS steriflow_cycle (
     source_filename           TEXT    NOT NULL,
     source_sha256             TEXT    NOT NULL,
 
-    -- Fase 3 del informe (esterilización). Puede quedar entera a NULL si la
+    -- Fase de esterilización del informe. Puede quedar entera a NULL si la
     -- fila no se pudo leer: el resto de la cabecera ya identifica el ciclo.
+    -- Qué fase se leyó (número y tipo tal y como los imprime la máquina):
+    -- cambia con el programa, así que sin esto no se puede revisar un ciclo
+    -- dudoso sin volver a abrir el PDF.
+    sterilization_phase_number INTEGER,
+    sterilization_phase_type  TEXT    NOT NULL DEFAULT '',
     sterilization_start_ts    TEXT,
     sterilization_end_ts      TEXT,
     sterilization_duration_s  INTEGER,
@@ -83,6 +102,21 @@ CREATE INDEX IF NOT EXISTS ix_sf_cycle_sha ON steriflow_cycle(autoclave_code, so
 """
 
 
+# Columnas que llegaron después de la primera versión de `steriflow_cycle`.
+# Ya están en el DDL de arriba (instalación nueva) y se añaden aquí a la tabla
+# que ya existía (instalación en marcha), que el CREATE TABLE IF NOT EXISTS no
+# toca. Ver `src/shared/db/migrate.py`.
+_COLUMNAS_ANADIDAS = (
+    ("autoclave", "TEXT NOT NULL DEFAULT ''"),
+    ("reported_code", "INTEGER"),
+    ("sterilization_phase_number", "INTEGER"),
+    ("sterilization_phase_type", "TEXT NOT NULL DEFAULT ''"),
+)
+
+
 def ensure_tables(conn: sqlite3.Connection) -> None:
-    """Crea las tablas de Steriflow si faltan. Idempotente."""
+    """Crea las tablas de Steriflow si faltan y añade las columnas nuevas a
+    las que ya existían. Idempotente."""
     conn.executescript(DDL)
+    for columna, definicion in _COLUMNAS_ANADIDAS:
+        add_column_if_missing(conn, "steriflow_cycle", columna, definicion)

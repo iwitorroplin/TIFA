@@ -34,11 +34,12 @@ _COL_STARTED_AT = 1
 _COL_PRODUCT = 2
 _COL_BATCH = 3
 _COL_CYCLE_NUMBER = 4
-_COL_DURATION = 5
-_COL_TEMP_MEAN = 6
-_COL_TEMP_MIN = 7
-_COL_TEMP_MAX = 8
-_COL_REVIEW = 9
+_COL_PHASE = 5
+_COL_DURATION = 6
+_COL_TEMP_MEAN = 7
+_COL_TEMP_MIN = 8
+_COL_TEMP_MAX = 9
+_COL_REVIEW = 10
 
 _HEADERS = [
     "Autoclave",
@@ -46,6 +47,7 @@ _HEADERS = [
     "Producto",
     "Lote",
     "Nº ciclo",
+    "Fase esterilización",
     "Duración esterilización",
     "T media (°C)",
     "T mín (°C)",
@@ -68,11 +70,20 @@ _PRINT_ALIGNS = [
     printing.Align.LEFT,    # Producto
     printing.Align.LEFT,    # Lote
     printing.Align.RIGHT,   # Nº ciclo
+    printing.Align.LEFT,    # Fase esterilización
     printing.Align.RIGHT,   # Duración
     printing.Align.RIGHT,   # T media
     printing.Align.RIGHT,   # T mín
     printing.Align.RIGHT,   # T máx
     printing.Align.LEFT,    # Revisión
+]
+
+# Orden de la consulta. Ordenar pinchando la cabecera engañaría: la tabla trae
+# una página de la base de datos cada vez, así que solo reordenaría las filas
+# visibles. Estas dos opciones se aplican en SQL, sobre el conjunto entero.
+_SORT_OPTIONS = [
+    ("Fecha (reciente primero)", False),
+    ("Autoclave y fecha", True),
 ]
 
 _PAGE_SIZES = [20, 50, 100]
@@ -127,6 +138,17 @@ class SteriflowDataPage(QWidget):
         self._product_filter_edit.setPlaceholderText("Buscar producto...")
         self._product_filter_edit.textChanged.connect(self._filter_debounce.start)
 
+        self._autoclave_combo = QComboBox()
+        self._autoclave_combo.addItem("Todas", userData=None)
+        for nombre, codigo in self._presenter.autoclaves():
+            self._autoclave_combo.addItem(nombre, userData=codigo)
+        self._autoclave_combo.currentIndexChanged.connect(self._on_filters_changed)
+
+        self._sort_combo = QComboBox()
+        for etiqueta, by_autoclave in _SORT_OPTIONS:
+            self._sort_combo.addItem(etiqueta, userData=by_autoclave)
+        self._sort_combo.currentIndexChanged.connect(self._on_filters_changed)
+
         self._date_from_checkbox = QCheckBox("Desde:")
         self._date_from_checkbox.toggled.connect(self._on_date_filter_toggled)
         self._date_from_edit = QDateEdit(QDate.currentDate())
@@ -152,6 +174,10 @@ class SteriflowDataPage(QWidget):
         row_layout.setContentsMargins(0, 0, 0, 0)
         row_layout.addWidget(QLabel("Producto:"))
         row_layout.addWidget(self._product_filter_edit)
+        row_layout.addWidget(QLabel("Autoclave:"))
+        row_layout.addWidget(self._autoclave_combo)
+        row_layout.addWidget(QLabel("Ordenar:"))
+        row_layout.addWidget(self._sort_combo)
         row_layout.addWidget(self._date_from_checkbox)
         row_layout.addWidget(self._date_from_edit)
         row_layout.addWidget(self._date_to_checkbox)
@@ -214,6 +240,8 @@ class SteriflowDataPage(QWidget):
     def _clear_filters(self):
         self._filter_debounce.stop()
         self._product_filter_edit.clear()
+        self._autoclave_combo.setCurrentIndex(0)
+        self._sort_combo.setCurrentIndex(0)
         self._date_from_checkbox.setChecked(False)
         self._date_to_checkbox.setChecked(False)
         self._needs_review_checkbox.setChecked(False)
@@ -222,6 +250,8 @@ class SteriflowDataPage(QWidget):
 
     def _on_filters_changed(self):
         self._presenter.set_product_query(self._product_filter_edit.text().strip())
+        self._presenter.set_autoclave_code(self._autoclave_combo.currentData())
+        self._presenter.set_by_autoclave(bool(self._sort_combo.currentData()))
         self._presenter.set_date_range(
             self._date_from_edit.date().toPython() if self._date_from_checkbox.isChecked() else None,
             self._date_to_edit.date().toPython() if self._date_to_checkbox.isChecked() else None,
@@ -262,6 +292,13 @@ class SteriflowDataPage(QWidget):
         table = self._cycles_table
         for col, text in enumerate(self._presenter.row_cells(cycle)):
             table.setItem(row, col, QTableWidgetItem(text))
+
+        # El número que imprime el informe va en el tooltip y no en una columna
+        # propia: solo hace falta para entender por qué un PDF MPI_10_* sale
+        # como AUTOCLAVE8, y no merece ensanchar la tabla.
+        aviso_codigo = self._presenter.autoclave_tooltip(cycle)
+        if aviso_codigo:
+            table.item(row, _COL_AUTOCLAVE).setToolTip(aviso_codigo)
 
         if cycle.needs_review:
             table.item(row, _COL_REVIEW).setToolTip(cycle.review_notes)

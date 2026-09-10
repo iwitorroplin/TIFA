@@ -50,9 +50,10 @@ _SECTIONS_PER_ROW = 3
 
 _COL_CODE = 0
 _COL_NAME = 1
-_COL_TEMP = 2
-_COL_TIME = 3
-_COL_ACTIVE = 4
+_COL_FORMAT = 2
+_COL_TEMP = 3
+_COL_TIME = 4
+_COL_ACTIVE = 5
 
 
 class FerloConfigPage(QWidget):
@@ -180,8 +181,9 @@ class FerloConfigPage(QWidget):
             )
             spin.setSingleStep(10 ** (-field.decimals) if field.decimals else 1.0)
             spin.setValue(float(valor))
-        if field.unit:
-            spin.setSuffix(f" {field.unit}")
+        # La unidad la lleva ya la etiqueta de la fila (`_build_section_group`):
+        # ponerla además como sufijo del campo la mostraba dos veces y dejaba
+        # el cursor detrás del texto al escribir.
         spin.valueChanged.connect(lambda value, s=section, f=field: self._on_field_changed(s, f, value))
         return spin
 
@@ -243,9 +245,9 @@ class FerloConfigPage(QWidget):
     def _build_programs_group(self):
         group = QGroupBox("Programas de consigna")
 
-        self._programs_table = QTableWidget(0, 5)
+        self._programs_table = QTableWidget(0, 6)
         self._programs_table.setHorizontalHeaderLabels(
-            ["Código", "Nombre", "Temperatura (°C)", "Tiempo (min)", "Activo"]
+            ["Código", "Nombre", "Formato", "Temperatura (°C)", "Tiempo (min)", "Activo"]
         )
         self._programs_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.ResizeToContents
@@ -284,6 +286,7 @@ class FerloConfigPage(QWidget):
             table.insertRow(row)
             table.setItem(row, _COL_CODE, QTableWidgetItem(programa.display_code))
             table.setItem(row, _COL_NAME, QTableWidgetItem(programa.name))
+            table.setItem(row, _COL_FORMAT, QTableWidgetItem(programa.format))
             table.setItem(row, _COL_TEMP, QTableWidgetItem(f"{programa.target_temperature_c:.1f}"))
             table.setItem(row, _COL_TIME, QTableWidgetItem(f"{programa.target_time_min:.1f}"))
             table.setItem(row, _COL_ACTIVE, QTableWidgetItem("Sí" if programa.is_active else "No"))
@@ -322,15 +325,21 @@ class _ProgramDialog(QDialog):
 
         self._name_edit = QLineEdit()
 
+        # Texto libre y no un número: el formato se nombra en planta con
+        # fracción y unidad juntas ("1/2 kg", "1I8", "3 kg").
+        self._format_edit = QLineEdit()
+        self._format_edit.setPlaceholderText("1/2 kg")
+
+        # Las unidades van en la etiqueta, no dentro del campo: repetirlas como
+        # sufijo del propio input las duplicaba en pantalla y estorbaba al
+        # teclear el número.
         self._temp_spin = QDoubleSpinBox()
         self._temp_spin.setRange(0.0, 150.0)
         self._temp_spin.setDecimals(1)
-        self._temp_spin.setSuffix(" °C")
 
         self._time_spin = QDoubleSpinBox()
         self._time_spin.setRange(0.0, 600.0)
         self._time_spin.setDecimals(1)
-        self._time_spin.setSuffix(" min")
 
         self._active_checkbox = QCheckBox("Activo")
         self._active_checkbox.setChecked(True)
@@ -338,8 +347,9 @@ class _ProgramDialog(QDialog):
         form = QFormLayout()
         form.addRow("Código:", self._code_spin)
         form.addRow("Nombre:", self._name_edit)
-        form.addRow("Temperatura de consigna:", self._temp_spin)
-        form.addRow("Tiempo de consigna:", self._time_spin)
+        form.addRow("Formato:", self._format_edit)
+        form.addRow("Temperatura de consigna (°C):", self._temp_spin)
+        form.addRow("Tiempo de consigna (min):", self._time_spin)
         form.addRow(self._active_checkbox)
 
         buttons = QDialogButtonBox(
@@ -358,6 +368,7 @@ class _ProgramDialog(QDialog):
         return SterilizationProgram(
             code=self._code_spin.value(),
             name=self._name_edit.text().strip(),
+            format=self._format_edit.text().strip(),
             target_temperature_c=self._temp_spin.value(),
             target_time_min=self._time_spin.value(),
             is_active=self._active_checkbox.isChecked(),

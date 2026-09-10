@@ -54,18 +54,23 @@ def save_cycle(conn: sqlite3.Connection, cycle: SterilizationCycle) -> tuple[int
 
     conn.execute(
         "INSERT INTO steriflow_cycle("
-        " autoclave_code, started_at, cycle_number, product, batch, cycles_counter,"
+        " autoclave_code, autoclave, reported_code, started_at, cycle_number, product,"
+        " batch, cycles_counter,"
         " reported_at, source_filename, source_sha256,"
+        " sterilization_phase_number, sterilization_phase_type,"
         " sterilization_start_ts, sterilization_end_ts, sterilization_duration_s,"
         " sterilization_temp_end_c, sterilization_temp_mean_c,"
         " sterilization_temp_min_c, sterilization_temp_max_c,"
         " needs_review, review_notes, imported_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(autoclave_code, started_at) DO UPDATE SET "
+        " autoclave=excluded.autoclave, reported_code=excluded.reported_code,"
         " cycle_number=excluded.cycle_number, product=excluded.product,"
         " batch=excluded.batch, cycles_counter=excluded.cycles_counter,"
         " reported_at=excluded.reported_at, source_filename=excluded.source_filename,"
         " source_sha256=excluded.source_sha256,"
+        " sterilization_phase_number=excluded.sterilization_phase_number,"
+        " sterilization_phase_type=excluded.sterilization_phase_type,"
         " sterilization_start_ts=excluded.sterilization_start_ts,"
         " sterilization_end_ts=excluded.sterilization_end_ts,"
         " sterilization_duration_s=excluded.sterilization_duration_s,"
@@ -76,9 +81,11 @@ def save_cycle(conn: sqlite3.Connection, cycle: SterilizationCycle) -> tuple[int
         " needs_review=excluded.needs_review, review_notes=excluded.review_notes,"
         " imported_at=excluded.imported_at",
         (
-            cycle.autoclave_code, to_iso(cycle.started_at), cycle.cycle_number,
+            cycle.autoclave_code, cycle.autoclave, cycle.reported_code,
+            to_iso(cycle.started_at), cycle.cycle_number,
             cycle.product, cycle.batch, cycle.cycles_counter,
             to_iso(cycle.reported_at), cycle.source_filename, cycle.source_sha256,
+            cycle.sterilization_phase_number, cycle.sterilization_phase_type,
             to_iso(cycle.sterilization_start_ts), to_iso(cycle.sterilization_end_ts),
             cycle.sterilization_duration_s,
             cycle.sterilization_temp_end_c, cycle.sterilization_temp_mean_c,
@@ -102,20 +109,27 @@ def list_cycles(
     date_from: dt.date | None = None,
     date_to: dt.date | None = None,
     needs_review: bool | None = None,
+    by_autoclave: bool = False,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[SterilizationCycle]:
     """Ciclos guardados, del más reciente al más antiguo.
 
+    `by_autoclave` agrupa antes por máquina, para poder leer de corrido lo de
+    una autoclave sin perder el orden por fecha dentro de cada una.
+
     `limit`/`offset` pagina en la propia consulta: con miles de ciclos
     guardados, cargarlos todos en memoria para pintar una tabla que solo
     muestra una página a la vez es el cuello de botella, no la base de datos.
+    El orden se aplica aquí, en SQL, y no sobre la página ya traída: ordenar
+    solo las 50 filas visibles daría un orden distinto en cada página.
     """
     where, params = _build_filters(
         autoclave_code=autoclave_code, product_query=product_query,
         date_from=date_from, date_to=date_to, needs_review=needs_review,
     )
-    sql = f"SELECT * FROM steriflow_cycle{where} ORDER BY started_at DESC"
+    orden = "autoclave_code, started_at DESC" if by_autoclave else "started_at DESC"
+    sql = f"SELECT * FROM steriflow_cycle{where} ORDER BY {orden}"
     if limit is not None:
         sql += " LIMIT ? OFFSET ?"
         params = params + [limit, offset]
@@ -183,6 +197,8 @@ def _row_to_cycle(fila: sqlite3.Row) -> SterilizationCycle:
     return SterilizationCycle(
         id=fila["id"],
         autoclave_code=fila["autoclave_code"],
+        autoclave=fila["autoclave"] or "",
+        reported_code=fila["reported_code"],
         started_at=from_iso(fila["started_at"]),
         cycle_number=fila["cycle_number"],
         product=fila["product"],
@@ -191,6 +207,8 @@ def _row_to_cycle(fila: sqlite3.Row) -> SterilizationCycle:
         reported_at=from_iso(fila["reported_at"]),
         source_filename=fila["source_filename"],
         source_sha256=fila["source_sha256"],
+        sterilization_phase_number=fila["sterilization_phase_number"],
+        sterilization_phase_type=fila["sterilization_phase_type"] or "",
         sterilization_start_ts=from_iso(fila["sterilization_start_ts"]),
         sterilization_end_ts=from_iso(fila["sterilization_end_ts"]),
         sterilization_duration_s=fila["sterilization_duration_s"],

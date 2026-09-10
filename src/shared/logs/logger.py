@@ -28,14 +28,22 @@ class Logger:
     de log de las que al usuario le importan una o dos -"terminado", "ha
     fallado"-, así que lo raro es lo que se anuncia, no lo que se calla.
 
+    Toda línea sale con la misma forma, `[fecha] [NIVEL] [ÁMBITO] texto`, para
+    que el log se pueda leer -y filtrar con un grep- sin conocer qué función la
+    escribió. El ámbito es opcional y se fija una vez con `scoped()` en vez de
+    repetirlo a mano en cada f-string.
+
     Lo escrito aquí es lo que se puede consultar después: la pestaña Logs del
     navbar muestra estos ficheros en vivo. `manager` no guarda nada.
     """
 
-    def __init__(self, log_file_path: Path, module: Module) -> None:
+    def __init__(self, log_file_path: Path, module: Module, *, scope: str = "") -> None:
         self.log_file_path = log_file_path
         # Qué módulo firma los mensajes que salgan de este logger con `talk`.
         self.module = module
+        # Sobre qué va todo lo que escriba este logger (una autoclave, una
+        # máquina...). Vacío = líneas del módulo entero.
+        self.scope = scope
 
         try:
             self.log_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -45,18 +53,33 @@ class Logger:
                 f"de logs '{self.log_file_path}': {ex}"
             )
 
-    def log(self, message: str, *, talk: MessageType | None = None) -> None:
-        """Anota `message` en el log. Con `talk=MessageType.X`, además lo dice
-        el personaje de esa severidad (mismo texto: lo que se le cuenta al
-        usuario tiene que poder leerse igual luego en el log).
+    def scoped(self, scope: str) -> "Logger":
+        """Otro logger sobre el mismo fichero y módulo, pero que estampa
+        `[scope]` en cada línea. Se usa para recorrer una lista de máquinas sin
+        que cada mensaje tenga que acordarse de repetir el prefijo -y sin que
+        unos lo pongan delante y otros detrás, como pasaba antes-."""
+        return Logger(self.log_file_path, self.module, scope=scope)
+
+    def log(
+        self,
+        message: str,
+        *,
+        level: MessageType | None = None,
+        talk: MessageType | None = None,
+    ) -> None:
+        """Anota `message` en el log con su nivel. Con `talk=MessageType.X`,
+        además lo dice el personaje de esa severidad (mismo texto: lo que se le
+        cuenta al usuario tiene que poder leerse igual luego en el log).
+
+        `level` es el nivel de la línea escrita; si no se dice, lo hereda de
+        `talk`, y a falta de los dos es INFO -el caso normal, una línea de
+        historial que no reclama nada-.
 
         Se puede llamar desde un hilo de trabajo: ver `MessageManager`.
         """
-        # El nivel se estampa solo en las líneas que además se dicen: son las
-        # pocas accionables de toda la ejecución, y así se encuentran de un
-        # vistazo (o con un grep) entre los cientos de PASO 1, PASO 2...
-        nivel = f"[{talk.name}] " if talk is not None else ""
-        line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {nivel}{message}"
+        nivel = level or talk or MessageType.INFO
+        ambito = f"[{self.scope}] " if self.scope else ""
+        line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] [{nivel.name}] {ambito}{message}"
         _to_console(line)
 
         try:

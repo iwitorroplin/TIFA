@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QHBoxLayout,
     QHeaderView,
-    QPlainTextEdit,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -17,6 +15,7 @@ from PySide6.QtWidgets import (
 from src.modules.steriflow.logic.logs import BACKUP_LOG_PREFIX, STERIFLOW_LOGS_ROOT
 from src.shared.logs.files import LogTailer
 from src.shared.logs.history import list_backup_logs
+from src.shared.ui.components.log_text_view import LogTextView
 
 _POLL_INTERVAL_MS = 1000
 _COL_DATE = 0
@@ -47,13 +46,7 @@ class SteriflowLogsPage(QWidget):
         self._follow_checkbox = QCheckBox("Seguir")
         self._follow_checkbox.setChecked(True)
 
-        self._text_view = QPlainTextEdit()
-        self._text_view.setReadOnly(True)
-        self._text_view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
-        self._text_view.setFont(QFont("Consolas", 10))
-        self._text_view.setStyleSheet(
-            "QPlainTextEdit { background-color: #1e1e1e; color: #d4d4d4; }"
-        )
+        self._text_view = LogTextView()
 
         top_layout = QHBoxLayout()
         top_layout.addStretch()
@@ -93,7 +86,7 @@ class SteriflowLogsPage(QWidget):
         if not self._rows:
             self._current_path = None
             self._tailer = None
-            self._text_view.clear()
+            self._text_view.set_log_text("")
             return
 
         if select_latest:
@@ -129,11 +122,11 @@ class SteriflowLogsPage(QWidget):
         self._current_path = path
         self._tailer = LogTailer(path)
         try:
-            self._text_view.setPlainText(path.read_text(encoding="utf-8", errors="replace"))
+            self._text_view.set_log_text(path.read_text(encoding="utf-8", errors="replace"))
         except OSError:
-            self._text_view.setPlainText("")
+            self._text_view.set_log_text("")
         self._tailer.read_new_text()  # sincroniza el offset con lo ya mostrado
-        self._scroll_to_bottom()
+        self._text_view.scroll_to_bottom()
 
     def _poll(self):
         latest = list_backup_logs(self._logs_directory(), BACKUP_LOG_PREFIX)
@@ -148,9 +141,5 @@ class SteriflowLogsPage(QWidget):
 
         new_text = self._tailer.read_new_text()
         if new_text:
-            self._text_view.appendPlainText(new_text.rstrip("\n"))
-            self._scroll_to_bottom()
-
-    def _scroll_to_bottom(self):
-        scrollbar = self._text_view.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+            self._text_view.append_log_text(new_text)
+            self._text_view.scroll_to_bottom()

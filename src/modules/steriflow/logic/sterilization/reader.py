@@ -1,38 +1,57 @@
-"""Lectura del dato de esterilización (fase 3) de un informe PDF de Steriflow.
+"""Lectura del dato de esterilización de un informe PDF de Steriflow.
 
-Cada PDF trae seis fases en la tabla HISTORIAL MEDIDAS:
+Cada PDF trae en la tabla HISTORIAL MEDIDAS una fila por fase:
 
     Fase Type        Inicio:  Fin:     Time phase length  T fin  T media  Min.   Max.
     3    Calentam.   01:18:08 01:30:15 00:12:07           128.94 128.66   124.44 129.53
 
-pero solo la 3 -esterilización- se guarda. Se lee esa tabla y no la sección
-LISTA DE DATOS -que trae la serie muestra a muestra- por dos razones: es la
-única que hace falta, y además es más exacta. El min/max de HISTORIAL MEDIDAS
-sale del muestreo interno de la máquina; LISTA DE DATOS imprime una muestra
-cada 30 s y en la fase 3 del informe de ejemplo deja fuera el mínimo real
-(124,84 impreso frente a 124,44 medido).
+De todas ellas solo se guarda la de esterilización -la meseta-, pero **no es
+siempre la 3**: el número de fases cambia con el programa (se han visto
+informes de 4, 6, 7 y 8) y con él la posición de la meseta. En 'TOMATE PELADO
+1KG' es la 2 y la 3 ya es un enfriamiento; en 'TOMATE PELADO 1l2KG' es la 4.
+Leerla por número fijo guardaba, en esos programas, la temperatura de un
+enfriamiento como si fuera la esterilización.
+
+Se elige por la estructura del ciclo, que es la misma en todos: primero las
+fases de calentamiento y al final las de enfriamiento (`Enfriamiento N`,
+`Forced cool. N`). La esterilización es **la última fase antes de que empiece a
+enfriar**; ahí es donde la máquina mantiene la meseta.
+
+Se lee esta tabla y no la sección LISTA DE DATOS -que trae la serie muestra a
+muestra- por dos razones: es la única que hace falta, y además es más exacta.
+El min/max de HISTORIAL MEDIDAS sale del muestreo interno de la máquina; LISTA
+DE DATOS imprime una muestra cada 30 s y en la fase de esterilización del
+informe de ejemplo deja fuera el mínimo real (124,84 impreso frente a 124,44
+medido).
 
 Las horas de la tabla son hora del día sin fecha; la fecha sale del corchete
 de la cabecera ('[01/06/2026 01:01:20]').
 
 Un dato que no se puede leer bien nunca tira el ciclo entero: la cabecera (que
 identifica el ciclo) se guarda si se pudo leer, y cualquier problema en la fila
-de la fase 3 -columnas pegadas, hora ilegible, fila que no aparece- deja los
-campos afectados a None y marca `needs_review` con el motivo, en vez de perder
-el ciclo o el dato en silencio.
+de la esterilización -columnas pegadas, hora ilegible, tabla que no aparece-
+deja los campos afectados a None y marca `needs_review` con el motivo, en vez
+de perder el ciclo o el dato en silencio.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from src.modules.steriflow.logic.sterilization.hashing import sha256_of
 from src.modules.steriflow.logic.sterilization.models import SterilizationCycle
 
 _SECCION = "HISTORIAL MEDIDAS"
-_STERILIZATION_PHASE_NUMBER = 3
+
+# Tipos de fase que son enfriamiento. Sobre 220 informes de las seis carpetas
+# solo aparecen tres tipos -"Calentam.", "Enfriamiento 1" y "Forced cool. 1"-,
+# así que basta con reconocer los de enfriar: todo lo demás es calentar o
+# mantener. Se incluyen las raíces en inglés y francés porque el informe las
+# mezcla ya hoy ("Forced cool.") y el idioma lo fija la máquina, no la app.
+_RE_ENFRIAMIENTO = re.compile(r"enfri|cool|refroid", re.IGNORECASE)
 
 # Pie de página: la máquina numera cada sección por separado ('1/1' en
 # HISTORIAL MEDIDAS). Permite saber que la tabla ya está completa sin abrir la
@@ -62,7 +81,7 @@ _RE_FILA_FASE_COMPLETA = re.compile(
 # alguna), la fila entera no encajaba en `_RE_FILA_FASE_COMPLETA` y antes se
 # descartaba sin más. El tipo y las tres horas siguen siendo fiables -llevan
 # ':' y no se pegan entre sí-, así que se localizan aquí igual y el resto de
-# la fila se intenta separar aparte (ver `_completar_fase3`).
+# la fila se intenta separar aparte (ver `_completar_fase`).
 _RE_FILA_FASE_PARCIAL = re.compile(
     r"^(\d+)\s+(\S.*?)\s+"
     r"(\d{1,2}:\d{2}:\d{2})\s+(\d{1,2}:\d{2}:\d{2})\s+(\d{1,2}:\d{2}:\d{2})\s+(.*)$"
@@ -81,6 +100,27 @@ _DURACION_TOLERANCIA_S = 60
 
 class SteriflowReadError(ValueError):
     """El PDF no tiene la forma de un informe de ciclo de Steriflow."""
+
+
+@dataclass(slots=True)
+class _FilaFase:
+    """Una fila de HISTORIAL MEDIDAS, ya separada en campos pero sin
+    interpretar: las horas siguen siendo texto (no llevan fecha hasta que se
+    resuelven contra el arranque del ciclo) y las temperaturas también (pueden
+    venir pegadas y hay que decidir qué hacer con ellas)."""
+
+    numero: int
+    tipo: str
+    inicio: str
+    fin: str
+    duracion: str
+    temperaturas: list[str]
+    # La línea tal cual, para poder citarla en una nota de revisión.
+    linea: str
+
+    @property
+    def es_enfriamiento(self) -> bool:
+        return _RE_ENFRIAMIENTO.search(self.tipo) is not None
 
 
 def _abrir_pdfplumber():
@@ -130,7 +170,7 @@ def _seccion_completa(texto: str) -> bool:
 
 
 def read_report(path: Path | str) -> SterilizationCycle:
-    """Lee un informe PDF y devuelve el dato de esterilización (fase 3).
+    """Lee un informe PDF y devuelve su dato de esterilización.
 
     Se deja de leer en cuanto HISTORIAL MEDIDAS está completa, en vez de
     extraer también la gráfica y LISTA DE DATOS -las páginas más caras del
@@ -154,7 +194,7 @@ def read_report(path: Path | str) -> SterilizationCycle:
         )
 
     ciclo = _leer_cabecera(texto, path)
-    _leer_fase3(paginas, ciclo)
+    _leer_fase_esterilizacion(paginas, ciclo)
     return ciclo
 
 
@@ -196,7 +236,11 @@ def _leer_cabecera(texto: str, path: Path) -> SterilizationCycle:
             break
 
     return SterilizationCycle(
+        # Los dos salen del PDF: quien conoce el número real de la máquina es
+        # la configuración, y es `sterilization/service.py` -que sabe de qué
+        # autoclave se está extrayendo- quien corrige `autoclave_code`.
         autoclave_code=int(m_autoclave.group(1)),
+        reported_code=int(m_autoclave.group(1)),
         started_at=started_at,
         source_filename=path.name,
         source_sha256=sha256_of(path),
@@ -208,61 +252,127 @@ def _leer_cabecera(texto: str, path: Path) -> SterilizationCycle:
     )
 
 
-def _leer_fase3(paginas: list[str], ciclo: SterilizationCycle) -> None:
+def _leer_fase_esterilizacion(paginas: list[str], ciclo: SterilizationCycle) -> None:
     pagina = next((p for p in paginas if _SECCION in p), None)
     if pagina is None:
         ciclo.needs_review = True
         _anadir_nota(ciclo, f"El informe no tiene sección '{_SECCION}'")
         return
 
-    for linea in pagina.splitlines():
-        m = _RE_FILA_FASE_COMPLETA.match(linea.strip())
-        if m is not None and int(m.group(1)) == _STERILIZATION_PHASE_NUMBER:
-            _, _, inicio_txt, fin_txt, duracion_txt, t_fin, t_media, t_min, t_max = m.groups()
-            _completar_fase3(ciclo, inicio_txt, fin_txt, duracion_txt, [t_fin, t_media, t_min, t_max])
-            return
+    # Solo desde el título de la sección hacia abajo: ahora que la fase se
+    # elige por su posición entre las demás, una fila con esta misma forma
+    # impresa más arriba en la página correría la cuenta y haría elegir otra.
+    filas = _leer_filas_de_fase(pagina[pagina.index(_SECCION):])
+    if not filas:
+        # Un ciclo abortado nada más arrancar imprime la tabla con guiones
+        # ("- - - - - - - - -") y ninguna fila de fase.
+        ciclo.needs_review = True
+        _anadir_nota(ciclo, f"No hay ninguna fila de fase en {_SECCION}")
+        return
 
+    fase = _elegir_fase_esterilizacion(filas, ciclo)
+    if fase is None:
+        return
+
+    ciclo.sterilization_phase_number = fase.numero
+    ciclo.sterilization_phase_type = fase.tipo
+
+    temperaturas: list[str | None] = list(fase.temperaturas)
+    if len(temperaturas) != 4:
+        # No se sabe CUÁL de las cuatro falta o sobra, así que no se asignan
+        # por posición -eso guardaría un valor en la columna equivocada sin
+        # que nada lo delate-: las cuatro quedan a None y se marca para
+        # revisión.
+        ciclo.needs_review = True
+        _anadir_nota(
+            ciclo,
+            f"Fase {fase.numero}: se esperaban 4 temperaturas y se leyeron "
+            f"{len(temperaturas)}: '{fase.linea}'",
+        )
+        temperaturas = [None, None, None, None]
+
+    _completar_fase(ciclo, fase, temperaturas)
+
+
+def _leer_filas_de_fase(pagina: str) -> list[_FilaFase]:
+    """Todas las filas de fase de la tabla, en el orden impreso.
+
+    Cada línea se prueba primero contra el patrón completo y, si no encaja,
+    contra el parcial: así una fila con las temperaturas pegadas (que el
+    patrón completo rechaza) sigue aportando su tipo y sus tres horas, en vez
+    de desaparecer de la lista y descolocar la elección de la fase.
+    """
+    filas: list[_FilaFase] = []
     for linea in pagina.splitlines():
         linea = linea.strip()
+
+        m = _RE_FILA_FASE_COMPLETA.match(linea)
+        if m is not None:
+            numero, tipo, inicio, fin, duracion, *temperaturas = m.groups()
+            filas.append(_FilaFase(int(numero), tipo.strip(), inicio, fin, duracion,
+                                   list(temperaturas), linea))
+            continue
+
         m = _RE_FILA_FASE_PARCIAL.match(linea)
-        if m is not None and int(m.group(1)) == _STERILIZATION_PHASE_NUMBER:
-            _, _, inicio_txt, fin_txt, duracion_txt, resto = m.groups()
-            temperaturas = _RE_NUMERO_SUELTO.findall(resto)
-            if len(temperaturas) != 4:
-                # No se sabe CUÁL de las cuatro falta o sobra, así que no se
-                # asignan por posición -eso guardaría un valor en la columna
-                # equivocada sin que nada lo delate-: las cuatro quedan a
-                # None y se marca para revisión.
-                ciclo.needs_review = True
-                _anadir_nota(
-                    ciclo,
-                    f"Fase 3: se esperaban 4 temperaturas y se leyeron "
-                    f"{len(temperaturas)}: '{linea}'",
-                )
-                temperaturas = [None, None, None, None]
-            _completar_fase3(ciclo, inicio_txt, fin_txt, duracion_txt, temperaturas)
-            return
+        if m is not None:
+            numero, tipo, inicio, fin, duracion, resto = m.groups()
+            filas.append(_FilaFase(int(numero), tipo.strip(), inicio, fin, duracion,
+                                   _RE_NUMERO_SUELTO.findall(resto), linea))
 
-    ciclo.needs_review = True
-    _anadir_nota(ciclo, "No se encontró la fila de la fase 3 en HISTORIAL MEDIDAS")
+    return filas
 
 
-def _completar_fase3(
+def _elegir_fase_esterilizacion(
+    filas: list[_FilaFase], ciclo: SterilizationCycle
+) -> _FilaFase | None:
+    """La última fase antes del primer enfriamiento (ver el docstring del módulo).
+
+    Devuelve None -y deja el ciclo marcado- cuando el informe no permite
+    decidir: si la primera fase ya es de enfriamiento no hay ninguna meseta
+    que guardar, y quedarse con la anterior sería inventarse el dato.
+    """
+    primer_enfriamiento = next(
+        (i for i, fila in enumerate(filas) if fila.es_enfriamiento), None
+    )
+
+    if primer_enfriamiento is None:
+        # El ciclo se cortó antes de enfriar (o la máquina imprimió tipos que
+        # no reconocemos). La última fase es lo más parecido a la meseta, pero
+        # no hay forma de confirmarlo desde el informe: se guarda y se avisa.
+        ciclo.needs_review = True
+        _anadir_nota(
+            ciclo,
+            "El informe no llega a enfriar: se toma la última fase "
+            f"({filas[-1].numero} {filas[-1].tipo}) como esterilización",
+        )
+        return filas[-1]
+
+    if primer_enfriamiento == 0:
+        ciclo.needs_review = True
+        _anadir_nota(
+            ciclo,
+            f"La primera fase del informe ya es de enfriamiento "
+            f"({filas[0].tipo}): no hay fase de esterilización que leer",
+        )
+        return None
+
+    return filas[primer_enfriamiento - 1]
+
+
+def _completar_fase(
     ciclo: SterilizationCycle,
-    inicio_txt: str,
-    fin_txt: str,
-    duracion_txt: str,
+    fase: _FilaFase,
     temperaturas: list[str | None],
 ) -> None:
-    hora_inicio = _hora_segura(inicio_txt)
-    hora_fin = _hora_segura(fin_txt)
-    duracion_impresa = _segundos_seguro(duracion_txt)
+    hora_inicio = _hora_segura(fase.inicio)
+    hora_fin = _hora_segura(fase.fin)
+    duracion_impresa = _segundos_seguro(fase.duracion)
 
     if hora_inicio is None or hora_fin is None:
         ciclo.needs_review = True
-        _anadir_nota(ciclo, "Fase 3: hora de inicio o fin ilegible")
+        _anadir_nota(ciclo, f"Fase {fase.numero}: hora de inicio o fin ilegible")
     else:
-        inicio_dt, fin_dt = _resolver_fechas_fase3(ciclo.started_at, hora_inicio, hora_fin)
+        inicio_dt, fin_dt = _resolver_fechas_fase(ciclo.started_at, hora_inicio, hora_fin)
         ciclo.sterilization_start_ts = inicio_dt
         ciclo.sterilization_end_ts = fin_dt
 
@@ -277,7 +387,7 @@ def _completar_fase3(
             ciclo.needs_review = True
             _anadir_nota(
                 ciclo,
-                f"Fase 3: la duración calculada ({duracion_calculada}s) no "
+                f"Fase {fase.numero}: la duración calculada ({duracion_calculada}s) no "
                 f"coincide con la impresa ({duracion_impresa}s)",
             )
 
@@ -301,19 +411,22 @@ def _completar_fase3(
 
     if conversion_fallida:
         ciclo.needs_review = True
-        _anadir_nota(ciclo, "Fase 3: alguna temperatura no se pudo interpretar como número")
+        _anadir_nota(
+            ciclo,
+            f"Fase {fase.numero}: alguna temperatura no se pudo interpretar como número",
+        )
 
 
-def _resolver_fechas_fase3(
+def _resolver_fechas_fase(
     started_at: dt.datetime, hora_inicio: dt.time, hora_fin: dt.time
 ) -> tuple[dt.datetime, dt.datetime]:
-    """Resuelve la fecha de la fase 3 a partir de la hora de arranque del ciclo.
+    """Resuelve la fecha de la fase a partir de la hora de arranque del ciclo.
 
-    Las horas de la tabla no llevan fecha. Si la hora de inicio de la fase 3 es
+    Las horas de la tabla no llevan fecha. Si la hora de inicio de la fase es
     anterior a la de arranque del ciclo, el ciclo cruzó la medianoche antes de
-    llegar a la fase 3; lo mismo si la de fin es anterior a la de inicio de la
-    propia fase. Al necesitar solo esta fase no hace falta recorrer las fases
-    1-2 en orden para llegar a la misma conclusión.
+    llegar a ella; lo mismo si la de fin es anterior a la de inicio de la
+    propia fase. Al necesitar solo esta fase no hace falta recorrer las
+    anteriores en orden para llegar a la misma conclusión.
     """
     fecha_inicio = started_at.date()
     if hora_inicio < started_at.time():

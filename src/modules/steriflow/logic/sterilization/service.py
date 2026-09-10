@@ -2,28 +2,39 @@
 esterilización. Llamado desde `BackupService` tras replicar hacia el
 servidor: primero se deja constancia de qué ha completado el backup, y solo
 después se intenta leer el contenido -así una reejecución sin PDF nuevos no
-vuelve a comprobar ni a abrir nada ya conocido."""
+vuelve a comprobar ni a abrir nada ya conocido.
+
+Aquí es donde el ciclo deja de ser "lo que dice el PDF" y pasa a ser "lo que
+dice la planta": el número de autoclave que se guarda es el de la
+configuración (`AutoclaveConfig.code`), no el que el informe imprime de sí
+mismo. Ver el porqué en `logic/config.py:AutoclaveConfig`.
+
+El logger llega ya con la autoclave puesta como ámbito (`Logger.scoped`), así
+que los mensajes de este módulo no repiten el nombre.
+"""
 
 from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
 
-from src.modules.steriflow.logic.config import SteriflowSettings
+from src.modules.steriflow.logic.config import AutoclaveConfig, SteriflowSettings
 from src.shared.logs.logger import Logger
+from src.shared.messages.types import MessageType
 from src.modules.steriflow.logic.sterilization import repo
 from src.modules.steriflow.logic.sterilization.hashing import sha256_of
+from src.modules.steriflow.logic.sterilization.models import SterilizationCycle
 from src.modules.steriflow.logic.sterilization.reader import SteriflowReadError, read_report
 
 
 def process(
     conn: sqlite3.Connection,
-    autoclave: str,
+    autoclave: AutoclaveConfig,
     local_folder: Path,
     backup_folder: Path,
     logger: Logger,
 ) -> None:
-    record_backup_files(conn, autoclave, local_folder, logger)
+    record_backup_files(conn, autoclave.name, local_folder, logger)
     extract_pending(conn, autoclave, local_folder, backup_folder, logger)
 
 
@@ -37,24 +48,24 @@ def record_backup_files(conn: sqlite3.Connection, autoclave: str, local_folder: 
 
 def extract_pending(
     conn: sqlite3.Connection,
-    autoclave: str,
+    autoclave: AutoclaveConfig,
     local_folder: Path,
     backup_folder: Path,
     logger: Logger,
 ) -> None:
-    pendientes = repo.pending_extraction(conn, autoclave)
+    pendientes = repo.pending_extraction(conn, autoclave.name)
     if not pendientes:
-        logger.log(f"[{autoclave}] Sin PDF pendientes de extraer")
+        logger.log("Sin PDF pendientes de extraer")
         return
 
-    logger.log(f"[{autoclave}] {len(pendientes)} PDF pendientes de extraer")
+    logger.log(f"{len(pendientes)} PDF pendientes de extraer")
     for fila in pendientes:
         _extract_one(conn, autoclave, fila, local_folder, backup_folder, logger)
 
 
 def _extract_one(
     conn: sqlite3.Connection,
-    autoclave: str,
+    autoclave: AutoclaveConfig,
     fila: sqlite3.Row,
     local_folder: Path,
     backup_folder: Path,
@@ -63,7 +74,9 @@ def _extract_one(
     ruta = _localizar_pdf(fila["filename"], local_folder, backup_folder)
     if ruta is None:
         mensaje = "no se encuentra el fichero ni en local ni en servidor"
-        logger.log(f"[{autoclave}]   ERROR extrayendo {fila['filename']}: {mensaje}")
+        logger.log(
+            f"  No se pudo extraer {fila['filename']}: {mensaje}", level=MessageType.ERROR
+        )
         repo.mark_extracted(conn, fila["id"], error=mensaje)
         conn.commit()
         return
@@ -71,18 +84,23 @@ def _extract_one(
     try:
         ciclo = read_report(ruta)
     except SteriflowReadError as exc:
-        logger.log(f"[{autoclave}]   ERROR extrayendo {fila['filename']}: {exc}")
+        logger.log(f"  No se pudo extraer {fila['filename']}: {exc}", level=MessageType.ERROR)
         repo.mark_extracted(conn, fila["id"], error=str(exc))
         conn.commit()
         return
     except Exception as exc:  # PDF corrupto, permisos, fichero en uso...
-        logger.log(f"[{autoclave}]   ERROR extrayendo {fila['filename']}: {exc}")
+        logger.log(f"  No se pudo extraer {fila['filename']}: {exc}", level=MessageType.ERROR)
         repo.mark_extracted(conn, fila["id"], error=str(exc))
         conn.commit()
         return
 
+    _aplicar_autoclave(ciclo, autoclave)
+
     if not ciclo.batch:
-        logger.log(f"[{autoclave}]   Aviso: {fila['filename']} sin lote reconocible en la cabecera")
+        logger.log(
+            f"  Aviso: {fila['filename']} sin lote reconocible en la cabecera",
+            level=MessageType.WARNING,
+        )
 
     _, era_nuevo = repo.save_cycle(conn, ciclo)
     repo.mark_extracted(conn, fila["id"])
@@ -90,7 +108,34 @@ def _extract_one(
 
     estado = "nuevo" if era_nuevo else "actualizado"
     aviso = " (necesita revisión: " + ciclo.review_notes + ")" if ciclo.needs_review else ""
-    logger.log(f"[{autoclave}]   Ciclo {estado}{aviso}: {fila['filename']}")
+    logger.log(
+        f"  Ciclo {estado}{aviso}: {fila['filename']}",
+        level=MessageType.WARNING if ciclo.needs_review else MessageType.INFO,
+    )
+
+
+def _aplicar_autoclave(ciclo: SterilizationCycle, autoclave: AutoclaveConfig) -> None:
+    """Sella el ciclo con la autoclave de la que salió el PDF.
+
+    El número real lo pone la configuración y no el informe: la AUTOCLAVE8
+    imprime 10 en todos los suyos. Lo que sí se comprueba es que el informe
+    diga lo que esa máquina suele decir de sí misma (`code` o `report_code`):
+    si no, el PDF está en la carpeta de otra máquina y el ciclo se guardaría
+    bajo una autoclave que no es la que lo hizo -así al menos queda marcado
+    para que alguien lo mire, en vez de colarse en silencio-.
+    """
+    impreso = ciclo.reported_code
+    ciclo.autoclave = autoclave.name
+    ciclo.autoclave_code = autoclave.code
+
+    if impreso is not None and impreso not in (autoclave.code, autoclave.report_code):
+        ciclo.needs_review = True
+        nota = (
+            f"El informe dice autoclave {impreso} y está en la carpeta de "
+            f"{autoclave.name} (que imprime {autoclave.report_code}): "
+            f"se guarda como autoclave {autoclave.code}"
+        )
+        ciclo.review_notes = f"{ciclo.review_notes}; {nota}" if ciclo.review_notes else nota
 
 
 def _localizar_pdf(filename: str, local_folder: Path, backup_folder: Path) -> Path | None:
@@ -110,11 +155,10 @@ def _localizar_pdf(filename: str, local_folder: Path, backup_folder: Path) -> Pa
 def find_pdf(settings: SteriflowSettings, source_filename: str) -> Path | None:
     """Busca el PDF de un ciclo ya guardado, para abrirlo desde la interfaz.
 
-    El ciclo no guarda de qué autoclave (config) vino -solo el código que
-    imprime la máquina dentro del PDF, que puede no coincidir con el nombre de
-    la carpeta (ver `steriflow_backup_file` vs `steriflow_cycle` en
-    `schema.py`)-, así que se recorren las carpetas de todas las autoclaves
-    configuradas hasta encontrarlo.
+    Se recorren las carpetas de todas las autoclaves configuradas en vez de ir
+    directo a la del ciclo: el fichero puede haberse movido de máquina o venir
+    de un ciclo guardado antes de que se guardara el nombre de la autoclave, y
+    buscar en todas cuesta lo mismo que acertar a la primera.
     """
     for autoclave in settings.autoclaves:
         ruta = _localizar_pdf(

@@ -5,7 +5,8 @@
         lee + agrupa por mes; separa lo nuevo de lo ya cubierto (D2)
         funde lo nuevo en el mensual de cada mes tocado (D1)
         registra la llegada en ferlo_import
-        vacía entrada (buzón transitorio)
+    vacía la entrada entera (buzón transitorio): también lo que no era CSV
+    importable, para que la carpeta quede como se la encontró el operario
     para cada mes tocado:
         relee el mensual entero (no solo lo nuevo: un ciclo puede empezar en
         datos ya archivados y seguir en los que acaban de llegar)
@@ -25,11 +26,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from src.modules.ferlo.logic.analysis import repo as analysis_repo
-from src.modules.ferlo.logic.analysis.models import CycleResult
+from src.modules.ferlo.logic.analysis.models import CycleResult, SterilizationProgram
+from src.modules.ferlo.logic.analysis.programs import ManualSetpoint, manual_program
 from src.modules.ferlo.logic.analysis.segment import segment
 from src.modules.ferlo.logic.analysis.service import assign
 from src.modules.ferlo.logic.config import Settings
 from src.modules.ferlo.logic.logs import agent_logger
+from src.shared.messages.types import MessageType
 
 from . import archive, repo
 from .checks import check_rows
@@ -50,6 +53,10 @@ class ImportSummary:
     machine: str
     arrivals: list[ArrivalResult] = field(default_factory=list)
     cycles_by_month: dict[tuple[int, int], list[CycleResult]] = field(default_factory=dict)
+    # Ficheros que quedaban en la carpeta de entrada y no eran CSV importables
+    # (ver `_vaciar_entrada`). Se cuentan aparte de `arrivals`: no aportaron
+    # ninguna fila, pero conviene que se vea que estaban ahí y ya no están.
+    leftovers_removed: int = 0
 
     @property
     def total_new_rows(self) -> int:
@@ -69,7 +76,7 @@ def import_machine(
 ) -> ImportSummary:
     """Importa y analiza todo lo pendiente de `machine`. Es lo único que
     llama la UI (Fase 4) y el script de terminal."""
-    log = agent_logger()
+    log = agent_logger().scoped(machine)
     resumen = ImportSummary(machine=machine)
     entrada_dir = settings.entrada_dir / machine
     archivo_dir = settings.archivo_dir
@@ -79,21 +86,21 @@ def import_machine(
     for csv_path in sorted(entrada_dir.glob("*.csv")) if entrada_dir.exists() else []:
         sha = repo.sha256_of(csv_path)
         if repo.already_arrived(conn, machine, sha):
-            log.log(f"Ferlo {machine}: {csv_path.name} ya habia llegado (mismos bytes), se omite")
+            log.log(f"{csv_path.name} ya habia llegado (mismos bytes), se omite")
             resumen.arrivals.append(ArrivalResult(csv_path.name, 0, 0, already_seen=True))
             csv_path.unlink()
             continue
 
         rows = read_raw_rows(csv_path)
         if not rows:
-            log.log(f"Ferlo {machine}: {csv_path.name} sin filas, se omite")
+            log.log(f"{csv_path.name} sin filas, se omite", level=MessageType.WARNING)
             csv_path.unlink()
             continue
 
         chequeo = check_rows(rows)
         if not chequeo.cuadra:
-            log.log(f"Ferlo {machine}: {csv_path.name} - patrones sin clasificar en TEMP/PRES "
-                     f"({chequeo.resumen_texto()})")
+            log.log(f"{csv_path.name} - patrones sin clasificar en TEMP/PRES "
+                    f"({chequeo.resumen_texto()})", level=MessageType.WARNING)
 
         filas_con_ts = [(row, parse_timestamp(row.date_raw, row.time_raw)) for row in rows]
         rangos = repo.covered_ranges(conn, machine)
@@ -114,19 +121,57 @@ def import_machine(
         )
         csv_path.unlink()
 
-        log.log(f"Ferlo {machine}: {csv_path.name} - {len(rows)} filas, "
-                 f"{len(nuevas)} nuevas ({chequeo.resumen_texto()})")
+        log.log(f"{csv_path.name} - {len(rows)} filas, "
+                f"{len(nuevas)} nuevas ({chequeo.resumen_texto()})")
         resumen.arrivals.append(
             ArrivalResult(csv_path.name, len(rows), len(nuevas), already_seen=False)
         )
 
+    resumen.leftovers_removed = _vaciar_entrada(entrada_dir, log)
+
     for anio, mes in sorted(meses_tocados):
         ciclos = _reanalizar_mes(conn, settings, machine, anio, mes)
         resumen.cycles_by_month[(anio, mes)] = ciclos
-        log.log(f"Ferlo {machine}: {anio:04d}-{mes:02d} - {len(ciclos)} ciclos")
+        log.log(f"{anio:04d}-{mes:02d} - {len(ciclos)} ciclos")
 
     conn.commit()
     return resumen
+
+
+def _vaciar_entrada(entrada_dir: Path, log) -> int:
+    """Deja la carpeta de entrada vacía y creada. Devuelve cuántos restos quitó.
+
+    La entrada es un buzón transitorio (D1): después de importar tiene que
+    quedar vacía, y hasta ahora solo se borraban los `.csv` que se llegaban a
+    procesar. Lo que fallaba al leerse, o lo que no era `.csv`, se quedaba ahí
+    para siempre -y en la siguiente importación seguía apareciendo como si
+    estuviera pendiente-.
+
+    Borra ficheros, nunca carpetas: una subcarpeta ahí dentro la ha puesto una
+    persona a propósito y no es de este código decidir que sobra. Un fichero
+    que no se deja borrar (abierto en Excel, sin permisos) se anota y se sigue:
+    dejar la carpeta a medio vaciar no puede tumbar una importación que ya ha
+    terminado bien.
+    """
+    if not entrada_dir.exists():
+        entrada_dir.mkdir(parents=True, exist_ok=True)
+        return 0
+
+    quitados = 0
+    for resto in sorted(entrada_dir.iterdir()):
+        if not resto.is_file():
+            continue
+        try:
+            resto.unlink()
+        except OSError as ex:
+            log.log(f"No se pudo vaciar {resto.name} de la entrada: {ex}",
+                    level=MessageType.WARNING)
+            continue
+        quitados += 1
+        log.log(f"Quitado de la entrada: {resto.name}", level=MessageType.WARNING)
+
+    entrada_dir.mkdir(parents=True, exist_ok=True)
+    return quitados
 
 
 def _reanalizar_mes(
@@ -150,15 +195,85 @@ def _leer_mes(settings: Settings, machine: str, anio: int, mes: int):
     return build_series(machine, ruta.name, rows)
 
 
+def _resolve_program(
+    conn: sqlite3.Connection,
+    program_code: int | None,
+    manual: ManualSetpoint | None,
+) -> SterilizationProgram | None:
+    """Traduce lo que pidió la pantalla al programa con el que evaluar.
+
+    Con `manual`, la consigna la puso una persona y NO se relee de
+    `ferlo_program`: se construye al vuelo (ver
+    `logic/analysis/programs.py:manual_program`). Releer la fila 0 haría que
+    teclear una consigna nueva cambiara la de todos los ciclos manuales ya
+    guardados, porque compartirían fila.
+    """
+    if manual is not None:
+        return manual_program(manual.target_temperature_c, manual.target_time_min)
+    if program_code is None:
+        return None
+    return analysis_repo.load_program(conn, program_code)
+
+
+def reassign_programs(
+    conn: sqlite3.Connection,
+    settings: Settings,
+    cycles: list[tuple[str, dt.datetime]],
+    program_code: int | None,
+    manual: ManualSetpoint | None = None,
+) -> int:
+    """Asigna (o quita) el mismo programa a varios ciclos. Devuelve cuántos se
+    pudieron reasignar.
+
+    Con `manual` se asigna la consigna tecleada a mano (programa 0) en vez de
+    un programa de la lista; `program_code` se ignora entonces.
+
+    Agrupa por máquina y mes para leer cada mensual UNA vez: `reassign_program`
+    relee el fichero entero en cada llamada, y asignar 50 ciclos del mismo mes
+    desde la pestaña de Ciclos lo leería 50 veces. Por lo demás hace
+    exactamente lo mismo -misma relectura, misma reevaluación, misma escritura
+    explícita del programa-, así que un ciclo asignado en bloque queda idéntico
+    a uno asignado desde su ventana de detalle.
+    """
+    por_mes: dict[tuple[str, int, int], list[dt.datetime]] = {}
+    for machine, started_at in cycles:
+        por_mes.setdefault((machine, started_at.year, started_at.month), []).append(started_at)
+
+    programa = _resolve_program(conn, program_code, manual)
+    reasignados = 0
+
+    for (machine, anio, mes), instantes in sorted(por_mes.items()):
+        ruta = archive.monthly_archive_path(settings.archivo_dir, machine, anio, mes)
+        if not ruta.exists():
+            continue
+
+        serie = _leer_mes(settings, machine, anio, mes)
+        detectados = {c.start_ts: c for c in segment(serie, settings)}
+        for started_at in instantes:
+            objetivo = detectados.get(started_at)
+            if objetivo is None:
+                continue
+            assign(serie, objetivo, settings, programa)
+            cycle_id = analysis_repo.save_cycle(conn, machine, serie, objetivo)
+            analysis_repo.write_program_assignment(conn, cycle_id, objetivo)
+            reasignados += 1
+
+    conn.commit()
+    return reasignados
+
+
 def reassign_program(
     conn: sqlite3.Connection,
     settings: Settings,
     machine: str,
     started_at: dt.datetime,
     program_code: int | None,
+    manual: ManualSetpoint | None = None,
 ) -> CycleResult | None:
     """Asigna (o quita, con `program_code=None`) el programa de un ciclo ya
-    guardado, y lo reevalúa. Es el único punto de la Fase 4 que escribe
+    guardado, y lo reevalúa. Con `manual` se asigna la consigna tecleada a
+    mano (programa 0) y `program_code` se ignora. Es el único punto de la
+    Fase 4 que escribe
     `program_code` -asignar es siempre un acto explícito (invariante de la
     Fase 0): a diferencia de `_reanalizar_mes`, aquí el programa lo dice
     quien llama, nunca `existing_program_code`.
@@ -183,7 +298,7 @@ def reassign_program(
     if objetivo is None:
         return None
 
-    programa = analysis_repo.load_program(conn, program_code) if program_code is not None else None
+    programa = _resolve_program(conn, program_code, manual)
     assign(serie, objetivo, settings, programa)
     cycle_id = analysis_repo.save_cycle(conn, machine, serie, objetivo)
     # save_cycle() nunca toca program_code en su rama de UPDATE -por diseño,

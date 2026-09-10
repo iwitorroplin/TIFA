@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -34,11 +35,11 @@ from src.modules.ferlo.logic.controller import FerloController
 from src.modules.ferlo.messages import catalog
 from src.shared.messages.notice import push
 from src.shared.messages.types import Module
+from src.modules.ferlo.logic.analysis.programs import MANUAL_PROGRAM_CODE
+from src.modules.ferlo.ui.program_selector import ProgramSelector
 from src.shared.ui.components.app_button import AppSaveButton
 
 _SEVERITY_COLORS = {"info": "#4d88cb", "review": "#c98a00", "error": "#e20c0c"}
-
-_UNASSIGNED = object()  # sentinel de userData para "sin asignar" en el combo
 
 
 class FerloDetailDialog(QDialog):
@@ -70,11 +71,14 @@ class FerloDetailDialog(QDialog):
             layout.addWidget(buttons)
             return
 
-        layout.addWidget(self._build_header(cycle))
-        layout.addWidget(self._build_plot(cycle), 3)
-        layout.addWidget(self._build_incidents_group(), 2)
-        layout.addWidget(self._build_assignment_group(cycle))
-        layout.addWidget(self._build_review_group(cycle))
+        # Dos columnas: a la izquierda lo que se lee y se decide (datos del
+        # ciclo, programa, veredicto, incidencias) y a la derecha la curva, que
+        # es lo que necesita ancho. Apilado en vertical, como estaba, la curva
+        # quedaba estrujada entre la cabecera y tres grupos.
+        columnas = QHBoxLayout()
+        columnas.addWidget(self._build_left_column(cycle), 1)
+        columnas.addWidget(self._build_plot(cycle), 2)
+        layout.addLayout(columnas)
 
         close_button = QPushButton("Cerrar")
         close_button.clicked.connect(self.accept)
@@ -83,11 +87,35 @@ class FerloDetailDialog(QDialog):
         bottom.addWidget(close_button)
         layout.addLayout(bottom)
 
+    def _build_left_column(self, cycle) -> QWidget:
+        contenido = QWidget()
+        columna = QVBoxLayout(contenido)
+        columna.setContentsMargins(0, 0, 0, 0)
+        columna.addWidget(self._build_header(cycle))
+        columna.addWidget(self._build_assignment_group(cycle))
+        columna.addWidget(self._build_review_group(cycle))
+        columna.addWidget(self._build_incidents_group(), 1)
+
+        # Dentro de un scroll: con muchas incidencias, la tabla aplastaba al
+        # resto de la columna en pantallas bajas.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setWidget(contenido)
+        return scroll
+
     def _build_header(self, cycle) -> QWidget:
         programa = f"{cycle.program_code:02d} · {cycle.program_name}" if cycle.program_code else "sin asignar"
+        # Las dos duraciones con su nombre: la del ciclo entero y la de la
+        # meseta, que son muy distintas (96,8 min frente a 73,6 en un ciclo
+        # real) y antes salía solo la primera, a secas, como "min".
+        esterilizacion = cycle.sterilization_duration_min
+        duraciones = f"ciclo {cycle.duration_min:.1f} min"
+        if esterilizacion is not None:
+            duraciones += f" · esterilización {esterilizacion:.1f} min"
         texto = (
             f"<b>{cycle.machine}</b> · {cycle.started_at:%d/%m/%Y %H:%M:%S} → {cycle.ended_at:%H:%M:%S}"
-            f" · {cycle.duration_min:.1f} min · programa {programa}"
+            f" · {duraciones} · programa {programa}"
             f" · consigna medida {cycle.measured_setpoint_c:.1f} °C"
             f" · estado <b>{catalog.status_label(cycle.status)}</b>"
         )
@@ -157,44 +185,39 @@ class FerloDetailDialog(QDialog):
     def _build_assignment_group(self, cycle) -> QWidget:
         group = QGroupBox("Programa")
 
-        self._program_combo = QComboBox()
-        self._program_combo.addItem("— sin asignar —", userData=_UNASSIGNED)
-
         sugeridos = programs_service.suggest_programs(self._programs, cycle.measured_setpoint_c)
-        codigos_sugeridos = {p.code for p in sugeridos}
-        for programa in sugeridos:
-            self._program_combo.addItem(f"★ {programa.display_code} · {programa.display_name}", userData=programa.code)
-        for programa in self._programs:
-            if programa.code in codigos_sugeridos:
-                continue
-            etiqueta = f"{programa.display_code} · {programa.display_name}"
-            if not programa.is_active:
-                etiqueta += " (inactivo)"
-            self._program_combo.addItem(etiqueta, userData=programa.code)
+        self._program_selector = ProgramSelector(self._programs, suggested=sugeridos)
+        self._program_selector.select_program(cycle.program_code)
+        if cycle.program_code == MANUAL_PROGRAM_CODE:
+            # Consigna manual ya asignada: los valores son los del ciclo, no
+            # los de la fila 0 -que no los guarda, ver `manual_program`-.
+            self._program_selector.set_manual_setpoint(
+                cycle.target_temperature_c or 0.0, cycle.target_time_min or 0.0
+            )
 
-        if cycle.program_code is not None:
-            index = self._program_combo.findData(cycle.program_code)
-            if index >= 0:
-                self._program_combo.setCurrentIndex(index)
-
-        assign_button = QPushButton("Asignar")
-        assign_button.setToolTip(
-            "Relee el mensual del archivo y reevalúa este ciclo con el programa elegido."
+        self._assign_button = QPushButton("Asignar")
+        self._assign_button.setToolTip(
+            "Relee el mensual del archivo y reevalúa este ciclo con la consigna elegida."
         )
-        assign_button.clicked.connect(self._on_assign_clicked)
+        self._assign_button.clicked.connect(self._on_assign_clicked)
+        self._program_selector.selection_changed.connect(self._sync_assign_button)
 
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Programa:"))
-        row.addWidget(self._program_combo, 1)
-        row.addWidget(assign_button)
+        boton_row = QHBoxLayout()
+        boton_row.addStretch()
+        boton_row.addWidget(self._assign_button)
 
         layout = QVBoxLayout(group)
-        layout.addLayout(row)
+        layout.addWidget(self._program_selector)
+        layout.addLayout(boton_row)
         if sugeridos:
             hint = QLabel("★ = sugerido por cercanía a la consigna medida (no elige, solo sugiere).")
             hint.setWordWrap(True)
             layout.addWidget(hint)
+        self._sync_assign_button()
         return group
+
+    def _sync_assign_button(self) -> None:
+        self._assign_button.setEnabled(self._program_selector.has_valid_selection())
 
     def _build_review_group(self, cycle) -> QWidget:
         group = QGroupBox("Revisión manual")
@@ -231,15 +254,21 @@ class FerloDetailDialog(QDialog):
 
     def _on_assign_clicked(self) -> None:
         cycle = self._cycle
-        data = self._program_combo.currentData()
-        program_code = None if data is _UNASSIGNED else data
+        manual = self._program_selector.manual_setpoint()
+        program_code = MANUAL_PROGRAM_CODE if manual else self._program_selector.program_code()
 
-        resultado = self._controller.reassign_program(cycle.machine, cycle.started_at, program_code)
+        resultado = self._controller.reassign_program(
+            cycle.machine, cycle.started_at, program_code, manual
+        )
         if resultado is None:
             push(Module.FERLO, catalog.assignment_failed())
             return
 
-        if program_code is None:
+        if manual is not None:
+            push(Module.FERLO, catalog.manual_setpoint_assigned(
+                cycle.machine, manual.target_temperature_c, manual.target_time_min
+            ))
+        elif program_code is None:
             push(Module.FERLO, catalog.program_unassigned(cycle.machine))
         else:
             push(Module.FERLO, catalog.program_assigned(cycle.machine, program_code))

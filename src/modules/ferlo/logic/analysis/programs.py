@@ -19,13 +19,17 @@ dejaría huérfanos los ciclos ya guardados que lo referencian (FK de
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
 
 from .models import SterilizationProgram
 from .repo import program_from_row
 
 
 def list_programs(conn: sqlite3.Connection, *, include_inactive: bool = True) -> list[SterilizationProgram]:
-    query = "SELECT code, name, target_temperature_c, target_time_min, is_active FROM ferlo_program"
+    query = (
+        "SELECT code, name, format, target_temperature_c, target_time_min, is_active"
+        " FROM ferlo_program"
+    )
     if not include_inactive:
         query += " WHERE is_active = 1"
     query += " ORDER BY code"
@@ -36,15 +40,17 @@ def upsert_program(conn: sqlite3.Connection, program: SterilizationProgram) -> N
     """Crea el programa si su código no existe, o actualiza sus datos si ya
     existía -nunca lo borra, ver el docstring de este módulo."""
     conn.execute(
-        "INSERT INTO ferlo_program (code, name, target_temperature_c, target_time_min, is_active)"
-        " VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO ferlo_program"
+        " (code, name, format, target_temperature_c, target_time_min, is_active)"
+        " VALUES (?, ?, ?, ?, ?, ?)"
         " ON CONFLICT(code) DO UPDATE SET"
         " name = excluded.name,"
+        " format = excluded.format,"
         " target_temperature_c = excluded.target_temperature_c,"
         " target_time_min = excluded.target_time_min,"
         " is_active = excluded.is_active",
         (
-            program.code, program.name, program.target_temperature_c,
+            program.code, program.name, program.format, program.target_temperature_c,
             program.target_time_min, int(program.is_active),
         ),
     )
@@ -73,3 +79,42 @@ def suggest_programs(
     activos = [p for p in programs if p.is_active]
     cercanos = [p for p in activos if abs(p.target_temperature_c - measured_setpoint_c) <= tolerance_c]
     return sorted(cercanos, key=lambda p: abs(p.target_temperature_c - measured_setpoint_c))
+
+
+# Código reservado para la consigna tecleada a mano en la pantalla de ciclos
+# (no es una posición del autoclave, por eso el 0: los programas reales van
+# del 1 al 50, ver `tools/seed_ferlo_programs.py`).
+MANUAL_PROGRAM_CODE = 0
+
+
+@dataclass(slots=True, frozen=True)
+class ManualSetpoint:
+    """Consigna tecleada a mano en la pantalla de ciclos, en vez de elegida
+    de la lista de programas. Viaja hasta `logic/ingest/service.py` como una
+    cosa sola para que no se pueda pasar la temperatura sin el tiempo."""
+
+    target_temperature_c: float
+    target_time_min: float
+
+
+def manual_program(target_temperature_c: float, target_time_min: float) -> SterilizationProgram:
+    """Programa de usar y tirar con la consigna que ha tecleado una persona.
+
+    No sale de `ferlo_program` ni se guarda en ella a propósito: los valores
+    viajan CON el ciclo (`ferlo_cycle.target_temperature_c/target_time_min`,
+    que ya se guardan por ciclo), no en una fila compartida. Si todos los
+    ciclos manuales leyeran la consigna de una misma fila 0, teclear una
+    nueva reescribiría en silencio la de todos los ciclos manuales
+    anteriores.
+
+    `is_active=False` para que `suggest_programs` no lo proponga nunca: es
+    una elección explícita, no algo que sugerir.
+    """
+    return SterilizationProgram(
+        code=MANUAL_PROGRAM_CODE,
+        name="Manual",
+        format="",
+        target_temperature_c=target_temperature_c,
+        target_time_min=target_time_min,
+        is_active=False,
+    )

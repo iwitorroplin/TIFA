@@ -112,8 +112,61 @@ def program_assigned(machine: str, program_code: int) -> Notice:
     return Notice(MessageType.SUCCESS, f"{machine}: programa {program_code:02d} asignado y ciclo reevaluado")
 
 
+def manual_setpoint_assigned(
+    machine: str, target_temperature_c: float, target_time_min: float
+) -> Notice:
+    """Consigna tecleada a mano en vez de elegida de la lista. Dice los
+    valores y no "programa 00": el 0 es una fila centinela para la clave
+    ajena (ver `logic/schema.py`), no un programa que nadie reconozca."""
+    return Notice(
+        MessageType.SUCCESS,
+        f"{machine}: consigna manual {target_temperature_c:.0f} °C / "
+        f"{target_time_min:.0f} min asignada y ciclo reevaluado",
+    )
+
+
+def manual_setpoints_assigned(
+    reassigned: int, selected: int, target_temperature_c: float, target_time_min: float
+) -> Notice:
+    """Igual que `programs_assigned`, pero para la consigna manual en bloque."""
+    tipo = MessageType.SUCCESS if reassigned == selected else MessageType.WARNING
+    return Notice(
+        tipo,
+        f"Consigna manual {target_temperature_c:.0f} °C / {target_time_min:.0f} min: "
+        f"{reassigned} de {selected} ciclos reevaluados",
+    )
+
+
 def program_unassigned(machine: str) -> Notice:
     return Notice(MessageType.SUCCESS, f"{machine}: programa retirado del ciclo")
+
+
+def programs_assigned(reassigned: int, selected: int, program_code: int | None) -> Notice:
+    """Resultado de asignar en bloque desde la pestaña de Ciclos.
+
+    Dice siempre los dos números, no solo el de los que salieron bien: si de
+    30 ciclos seleccionados solo se reasignan 28, un "28 ciclos actualizados"
+    a secas se leería como un éxito completo.
+    """
+    que = "programa retirado de" if program_code is None else f"programa {program_code:02d} asignado a"
+
+    if reassigned == 0:
+        return Notice(
+            MessageType.WARNING,
+            f"Ningún ciclo de los {selected} seleccionados se pudo reevaluar: "
+            "¿está el mensual del archivo en su sitio?",
+        )
+    if reassigned < selected:
+        return Notice(
+            MessageType.WARNING,
+            f"{que} {reassigned} de {selected} ciclo(s): el resto ya no aparece al "
+            "volver a analizar su mensual",
+        )
+    return Notice(MessageType.SUCCESS, f"{que} {reassigned} ciclo(s), ya reevaluados")
+
+
+def no_cycles_selected_to_assign() -> Notice:
+    return Notice(MessageType.WARNING, "Selecciona antes los ciclos a los que asignar el programa")
 
 
 def assignment_failed() -> Notice:

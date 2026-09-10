@@ -5,7 +5,7 @@ from src.shared.assets.paths import (
     ICONS_DIR,
     IMAGES_DIR,
     MATERIAS_DIR,
-    OTHERS_DIR,
+    BUTTONS_DIR,
 )
 
 # ICONOS .ico
@@ -38,16 +38,17 @@ MATERIA_GREEN_IMAGE = MATERIAS_DIR / "materia_green.svg"
 MATERIA_PURPLE_IMAGE = MATERIAS_DIR / "materia_purple.svg"
 MATERIA_RED_IMAGE = MATERIAS_DIR / "materia_red.svg"
 MATERIA_YELLOW_IMAGE = MATERIAS_DIR / "materia_yellow.svg"
-# materia_action
-MATERIA_STARTER_IMAGE = MATERIAS_DIR / "materia_start.svg"
-MATERIA_STOP_IMAGE = MATERIAS_DIR / "materia_stop.svg"
 
-# OTHER
-FOLDER_IMAGE = OTHERS_DIR / "folder.svg"
-SAVE_IMAGE = OTHERS_DIR / "save.svg"
-DELETE_IMAGE = OTHERS_DIR / "delete.svg"
-MODIFY_IMAGE = OTHERS_DIR / "modify.svg"
-ADD_IMAGE = OTHERS_DIR / "add.svg"
+
+# buttons
+
+MATERIA_STARTER_IMAGE = BUTTONS_DIR / "start.svg"
+MATERIA_STOP_IMAGE = BUTTONS_DIR / "stop.svg"
+FOLDER_IMAGE = BUTTONS_DIR / "folder.svg"
+SAVE_IMAGE = BUTTONS_DIR / "save.svg"
+DELETE_IMAGE = BUTTONS_DIR / "delete.svg"
+MODIFY_IMAGE = BUTTONS_DIR / "modify.svg"
+ADD_IMAGE = BUTTONS_DIR / "add.svg"
 
 # DIAGRAMAS
 FERLO_VARIABLES_DIAGRAM = DIAGRAMS_DIR / "ferlo_variables.svg"

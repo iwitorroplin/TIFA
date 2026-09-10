@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 
 from src.shared.logs.logger import Logger
+from src.shared.messages.types import MessageType
 
 
 def run_robocopy(source: str, destination: str, file_mask: str, logger: Logger) -> int:
@@ -36,13 +37,25 @@ def run_robocopy(source: str, destination: str, file_mask: str, logger: Logger) 
     )
 
     # Códigos 0-7 = éxito (incluye "sin cambios"); 8+ = hubo fallos. Ver robocopy /?.
+    #
+    # El resultado va con nivel (SUCCESS/ERROR) y no como un "OK"/"ERROR"
+    # dentro del texto: así esta línea se lee y se filtra igual que las demás
+    # del log, que es lo que antes rompía -era la única línea del backup sin
+    # nivel ni autoclave-. El ámbito lo pone el logger que llega (ver
+    # `Logger.scoped` en backup/service.py).
     exit_code = result.returncode
     if exit_code >= 8:
-        logger.log(f"ERROR robocopy [{source} -> {destination}] código de salida {exit_code}")
+        logger.log(
+            f"robocopy [{source} -> {destination}] código de salida {exit_code}",
+            level=MessageType.ERROR,
+        )
         for line in _relevant_lines(result.stdout):
-            logger.log(f"  {line}")
+            logger.log(f"  {line}", level=MessageType.ERROR)
     else:
-        logger.log(f"OK robocopy [{source} -> {destination}] código de salida {exit_code}")
+        logger.log(
+            f"robocopy [{source} -> {destination}] código de salida {exit_code}",
+            level=MessageType.SUCCESS,
+        )
 
     return exit_code
 

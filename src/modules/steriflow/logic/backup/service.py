@@ -12,6 +12,7 @@ from src.modules.steriflow.logic.logs import new_backup_logger
 from src.modules.steriflow.messages import catalog
 from src.shared.logs.logger import Logger
 from src.shared.messages.notice import announce
+from src.shared.messages.types import MessageType
 from src.modules.steriflow.logic.sterilization import service as sterilization_service
 
 # robocopy: 0-7 es exito (incluye "sin cambios"), 8+ es fallo. Ver robocopy /?.
@@ -86,13 +87,16 @@ class BackupService:
         aviso final es SUCCESS o WARNING (ver la clase `BackupService`)."""
         incidencias = 0
         for autoclave in self._settings.autoclaves:
+            # Un logger por autoclave: el nombre lo estampa él en cada línea,
+            # en vez de que cada mensaje se acuerde de repetirlo delante.
+            log = logger.scoped(autoclave.name)
             if not autoclave.active:
-                logger.log(f"[{autoclave.name}] Inactiva, se omite")
+                log.log("Inactiva, se omite", level=MessageType.WARNING)
                 continue
             try:
-                incidencias += self._fetch_autoclave(autoclave, logger, disponibilidad.get(autoclave.name))
+                incidencias += self._fetch_autoclave(autoclave, log, disponibilidad.get(autoclave.name))
             except Exception as ex:
-                logger.log(f"[{autoclave.name}] ERROR trayendo PDF de la autoclave: {ex}")
+                log.log(f"No se pudieron traer los PDF de la autoclave: {ex}", level=MessageType.ERROR)
                 incidencias += 1
         return incidencias
 
@@ -106,13 +110,14 @@ class BackupService:
         conn = connect()
         try:
             for autoclave in self._settings.autoclaves:
+                log = logger.scoped(autoclave.name)
                 if not autoclave.active:
-                    logger.log(f"[{autoclave.name}] Inactiva, se omite")
+                    log.log("Inactiva, se omite", level=MessageType.WARNING)
                     continue
                 try:
-                    incidencias += self._backup_autoclave(autoclave, logger, conn)
+                    incidencias += self._backup_autoclave(autoclave, log, conn)
                 except Exception as ex:
-                    logger.log(f"[{autoclave.name}] ERROR replicando hacia el servidor: {ex}")
+                    log.log(f"No se pudo replicar hacia el servidor: {ex}", level=MessageType.ERROR)
                     incidencias += 1
         finally:
             conn.close()
@@ -123,11 +128,14 @@ class BackupService:
     ) -> int:
         local_path = Path(autoclave.local_folder)
 
-        logger.log(f"[INFO] [{autoclave.name}]: Check local_path")
+        logger.log(f"Preparando la carpeta local {autoclave.local_folder}")
         local_path.mkdir(parents=True, exist_ok=True)
 
         if not autoclave.path_folder.strip():
-            logger.log(f"[{autoclave.name}] Sin carpeta de origen configurada, se omite la copia desde la autoclave")
+            logger.log(
+                "Sin carpeta de origen configurada, se omite la copia desde la autoclave",
+                level=MessageType.WARNING,
+            )
             return 0
 
         # 1er check: si no responde -ya comprobado una vez para todas al
@@ -135,8 +143,9 @@ class BackupService:
         # intentar la copia. No se vuelve a pingear aquí.
         if disponibilidad is None or not disponibilidad.is_available:
             logger.log(
-                f"[{autoclave.name}] Sin conexión con {autoclave.ip} (comprobado al lanzar la acción), "
-                f"se omite la copia desde {autoclave.path_folder}"
+                f"Sin conexión con {autoclave.ip} (comprobado al lanzar la acción), "
+                f"se omite la copia desde {autoclave.path_folder}",
+                level=MessageType.WARNING,
             )
             return 0
 
@@ -145,12 +154,11 @@ class BackupService:
         # pudo comprobar la carpeta): en ese caso se sigue e intenta, no se
         # asume que no hay nada.
         if disponibilidad.pending_fetch == 0:
-            logger.log(f"[{autoclave.name}] Sin informes nuevos en la autoclave, se omite la copia")
+            logger.log("Sin informes nuevos en la autoclave, se omite la copia")
             return 0
 
         logger.log(
-            f"[INFO] [{autoclave.name}] : Import PDF {autoclave.path_folder} to {autoclave.local_folder}"
-
+            f"Trayendo los PDF de {autoclave.path_folder} a {autoclave.local_folder}"
         )
         # Destino como string crudo, no str(local_path): igual que con
         # path_folder, Path le añadiría una barra final a un recurso pelado.
@@ -163,27 +171,27 @@ class BackupService:
         local_path = Path(autoclave.local_folder)
         server_path = Path(autoclave.backup_folder)
 
-        logger.log(f"[INFO] [{autoclave.name}] : Check {autoclave.backup_folder} asegura la carpeta de servidor")
+        logger.log(f"Preparando la carpeta de servidor {autoclave.backup_folder}")
         server_path.mkdir(parents=True, exist_ok=True)
 
-        logger.log(f"[INFO] [{autoclave.name}] : Check new file")
+        logger.log("Comprobando qué informes faltan en el servidor")
         nuevos = new_reports(local_path, server_path)
         if nuevos:
-            logger.log(f"[{autoclave.name}] {len(nuevos)} pdf(s) new(s):")
+            logger.log(f"{len(nuevos)} PDF nuevo(s):")
             for pdf in nuevos:
-                logger.log(f"[{autoclave.name}]   {pdf.relative_to(local_path)}")
+                logger.log(f"  {pdf.relative_to(local_path)}")
         else:
-            logger.log(f"[{autoclave.name}] Sin informes nuevos")
+            logger.log("Sin informes nuevos")
 
-        logger.log(f"[{autoclave.name}] PASO 5: replica lo local hacia el servidor")
+        logger.log("Replicando lo local hacia el servidor")
         # Destino como string crudo, no str(server_path): igual que con
         # path_folder, Path le añadiría una barra final a un recurso pelado.
         codigo = run_robocopy(autoclave.local_folder, autoclave.backup_folder, "*.pdf", logger)
 
-        logger.log(f"[{autoclave.name}] PASO 6: extrae el dato de esterilización de los PDF nuevos")
+        logger.log("Extrayendo el dato de esterilización de los PDF nuevos")
         # Un PDF que no se deja leer no cuenta como incidencia de la copia:
         # queda marcado con su error en la base de datos (`repo.mark_extracted`)
         # y se reintenta; el backup en sí fue bien.
-        sterilization_service.process(conn, autoclave.name, local_path, server_path, logger)
+        sterilization_service.process(conn, autoclave, local_path, server_path, logger)
 
         return 1 if codigo >= _ROBOCOPY_FAILURE_CODE else 0

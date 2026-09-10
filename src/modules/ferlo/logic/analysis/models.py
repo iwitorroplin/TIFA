@@ -86,10 +86,12 @@ class SterilizationProgram:
     """Programa de consigna: solo lo que el analisis necesita para evaluar un
     ciclo -codigo, temperatura y tiempo objetivo, y si esta activo-.
 
-    `name` es una etiqueta libre (columna `ferlo_program.name`, ver
-    `logic/schema.py`) que el analisis nunca lee -solo la pestaña de
-    Configuracion (Fase 4), para que la tabla de programas sea reconocible
-    sin memorizar 38 pares de numeros-.
+    `name` y `format` son etiquetas libres (columnas `ferlo_program.name` y
+    `ferlo_program.format`, ver `logic/schema.py`) que el analisis nunca lee
+    -solo la pestaña de Configuracion (Fase 4), para que la tabla de programas
+    sea reconocible sin memorizar 38 pares de numeros-. `format` es el formato
+    del envase ("1/2 kg", "3 kg"...): texto libre y no un numero porque en
+    planta se nombra asi, con fraccion y unidad juntas.
     """
 
     code: int
@@ -97,6 +99,7 @@ class SterilizationProgram:
     target_time_min: float
     is_active: bool = True
     name: str = ""
+    format: str = ""
 
     @property
     def display_code(self) -> str:

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDateEdit,
+    QDialog,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -18,24 +19,34 @@ from PySide6.QtWidgets import (
 )
 
 from src.modules.ferlo.logic.controller import FerloController
-from src.modules.ferlo.ui.data_presenter import DEFAULT_PAGE_SIZE, FerloDataPresenter
+from src.modules.ferlo.messages import catalog
+from src.modules.ferlo.logic.analysis.programs import MANUAL_PROGRAM_CODE
+from src.modules.ferlo.ui.assign_program_dialog import AssignProgramDialog
+from src.modules.ferlo.ui.data_presenter import (
+    DEFAULT_PAGE_SIZE,
+    FerloDataPresenter,
+)
 from src.modules.ferlo.ui.detail_dialog import FerloDetailDialog
+from src.shared.messages.notice import push
+from src.shared.messages.types import Module
 from src.shared.ui.components.app_button import AppButton
 
 _COL_MACHINE = 0
 _COL_STARTED_AT = 1
 _COL_PROGRAM = 2
-_COL_DURATION = 3
-_COL_MEAN = 4
-_COL_MEAN_STABLE = 5
-_COL_STATUS = 6
-_COL_VERDICT = 7
+_COL_STERILIZATION_DURATION = 3
+_COL_CYCLE_DURATION = 4
+_COL_MEAN = 5
+_COL_MEAN_STABLE = 6
+_COL_STATUS = 7
+_COL_VERDICT = 8
 
 _HEADERS = [
     "Máquina",
     "Fecha inicio",
     "Programa",
-    "Duración (min)",
+    "Duración esterilización (min)",
+    "Duración ciclo (min)",
     "T media (°C)",
     "T media estable (°C)",
     "Estado",
@@ -69,6 +80,7 @@ class FerloDataPage(QWidget):
         group_layout = QVBoxLayout(group)
         group_layout.addWidget(self._build_filters_row())
         group_layout.addWidget(self._cycles_table)
+        group_layout.addWidget(self._build_actions_row())
         group_layout.addWidget(self._build_pagination_row())
 
         layout = QVBoxLayout(self)
@@ -85,10 +97,65 @@ class FerloDataPage(QWidget):
         table.horizontalHeader().setSectionResizeMode(_COL_PROGRAM, QHeaderView.ResizeMode.Stretch)
         table.verticalHeader().setVisible(False)
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        # Selección múltiple (igual que la tabla de Steriflow): es lo que
+        # permite asignar un programa a varios ciclos de una vez, que es como
+        # llegan -una tanda entera del mismo producto-.
+        table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         table.cellDoubleClicked.connect(self._on_row_double_clicked)
         return table
+
+    def _build_actions_row(self):
+        assign_button = AppButton("Asignar a la selección...")
+        assign_button.setToolTip(
+            "Abre el selector de consigna y reevalúa con ella todos los ciclos "
+            "seleccionados."
+        )
+        assign_button.clicked.connect(self._on_assign_selection_clicked)
+
+        row = QWidget()
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.addWidget(assign_button)
+        row_layout.addStretch()
+        return row
+
+    def _on_assign_selection_clicked(self):
+        seleccion = self._selected_cycles()
+        if not seleccion:
+            push(Module.FERLO, catalog.no_cycles_selected_to_assign())
+            return
+
+        # El diálogo hace de confirmación: reasignar reescribe el veredicto
+        # calculado de cada ciclo, y con selección múltiple un clic de más
+        # puede tocar una pantalla entera. Los programas se leen aquí y no en
+        # el arranque porque se editan en otra pestaña.
+        dialogo = AssignProgramDialog(
+            self._controller.list_programs(include_inactive=True), len(seleccion), self
+        )
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        manual = dialogo.manual_setpoint()
+        program_code = MANUAL_PROGRAM_CODE if manual else dialogo.program_code()
+
+        reasignados = self._controller.reassign_programs(
+            [(cycle.machine, cycle.started_at) for cycle in seleccion], program_code, manual
+        )
+        if manual is not None:
+            push(Module.FERLO, catalog.manual_setpoints_assigned(
+                reasignados, len(seleccion),
+                manual.target_temperature_c, manual.target_time_min,
+            ))
+        else:
+            push(Module.FERLO, catalog.programs_assigned(
+                reasignados, len(seleccion), program_code
+            ))
+        self._refresh()
+
+    def _selected_cycles(self):
+        filas = sorted({index.row() for index in self._cycles_table.selectionModel().selectedRows()})
+        return self._presenter.cycles_at(filas)
 
     def _build_filters_row(self):
         self._machine_combo = QComboBox()

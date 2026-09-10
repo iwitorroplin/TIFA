@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import time
 from pathlib import Path
@@ -39,6 +40,20 @@ def _default_backup_folder(name: str, server_root: Path) -> str:
     return str(server_root / name)
 
 
+def default_autoclave_code(name: str) -> int:
+    """Número de autoclave que se deduce del nombre ("AUTOCLAVE8" -> 8).
+
+    Apaño de migración, igual que las funciones de rutas de aquí al lado: una
+    instalación anterior a `code` tiene su steriflowConfig.yaml sin la clave, y
+    `ensure_config_file` no reescribe un fichero que ya existe. Los nombres
+    siguen todos la misma forma, así que el número está ahí; si algún día uno
+    no lo lleva, queda a 0 y se ve en la pestaña de Configuración, en vez de
+    reventar el arranque.
+    """
+    digitos = re.findall(r"\d+", name)
+    return int(digitos[-1]) if digitos else 0
+
+
 def _default_local_folder(name: str, local_root: Path) -> str:
     """Carpeta local que se usaba antes de ser configurable por autoclave.
 
@@ -54,6 +69,19 @@ def _default_local_folder(name: str, local_root: Path) -> str:
 class AutoclaveConfig:
     name: str
     ip: str
+    # code: el número real de la autoclave, el que usa la planta para
+    # nombrarla. Es el que se guarda con cada ciclo.
+    #
+    # report_code: el número que la máquina imprime de sí misma en sus PDF
+    # ("Cód. Autoclave"). Normalmente es el mismo, pero la AUTOCLAVE8 imprime
+    # 10 -sus informes se llaman MPI_10_*- por un error histórico de su
+    # configuración interna que ya no se puede corregir en los PDF ya
+    # emitidos. Guardar los dos permite traducir ese 10 a 8 al extraer y, a la
+    # vez, seguir sabiendo qué decía el informe: si el número impreso no es
+    # ninguno de los dos, ese PDF no es de esta máquina y se marca para
+    # revisión (ver `logic/sterilization/service.py`).
+    code: int
+    report_code: int
     # Cadena y no Path en los tres campos de ruta: pasarlos por Path le añade
     # una barra final a un recurso pelado (\\MAQUINA\Export), reescribiendo en
     # silencio lo que escribió el usuario. Tampoco pasan por `resolve_path`,
@@ -118,6 +146,15 @@ def load_settings() -> SteriflowSettings:
             AutoclaveConfig(
                 name=item["name"],
                 ip=item["ip"],
+                code=int(item.get("code") or default_autoclave_code(item["name"])),
+                # Sin `report_code` en el yaml se asume que la máquina imprime
+                # su propio número, que es lo normal: solo la AUTOCLAVE8 no lo
+                # hace, y ahí la clave está puesta a mano.
+                report_code=int(
+                    item.get("report_code")
+                    or item.get("code")
+                    or default_autoclave_code(item["name"])
+                ),
                 path_folder=item.get("path_folder") or _default_path_folder(item["name"]),
                 local_folder=item.get("local_folder")
                 or _default_local_folder(item["name"], local_root),
@@ -148,6 +185,8 @@ def save_settings(settings: SteriflowSettings) -> None:
             {
                 "name": a.name,
                 "ip": a.ip,
+                "code": a.code,
+                "report_code": a.report_code,
                 "path_folder": a.path_folder,
                 "local_folder": a.local_folder,
                 "backup_folder": a.backup_folder,

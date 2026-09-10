@@ -12,6 +12,8 @@ from pathlib import Path
 from src.shared.db.schema import ensure_schema
 from src.shared.paths import DATA_DIR
 
+
+# ruta de la base de datos en desarrolo
 DB_PATH = DATA_DIR / "tifa.db"
 
 

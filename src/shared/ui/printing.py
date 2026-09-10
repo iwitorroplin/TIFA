@@ -227,7 +227,12 @@ class PrintJob:
     def preview(self, parent: QWidget | None = None) -> None:
         """Abre la vista previa estándar; desde ahí el usuario imprime."""
         document = self.build_document()
-        dialog = QPrintPreviewDialog(self._new_printer(), parent)
+        # El diálogo no se adueña de la QPrinter: si se le pasa como temporal,
+        # Python la destruye al volver del constructor y exec() acaba pintando
+        # sobre memoria liberada (la aplicación se cierra de golpe). La
+        # variable local la mantiene viva durante toda la vista previa.
+        printer = self._new_printer()
+        dialog = QPrintPreviewDialog(printer, parent)
         dialog.paintRequested.connect(document.print_)
         dialog.exec()
 

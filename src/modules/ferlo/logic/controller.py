@@ -16,9 +16,15 @@ import datetime as dt
 
 from src.modules.ferlo.logic.analysis import programs as programs_repo
 from src.modules.ferlo.logic.analysis import repo as analysis_repo
+from src.modules.ferlo.logic.analysis.programs import ManualSetpoint
 from src.modules.ferlo.logic.analysis.models import CycleResult, ManualVerdict, SterilizationProgram
 from src.modules.ferlo.logic.config import Settings, load_settings
-from src.modules.ferlo.logic.ingest.service import ImportSummary, import_machine, reassign_program
+from src.modules.ferlo.logic.ingest.service import (
+    ImportSummary,
+    import_machine,
+    reassign_program,
+    reassign_programs,
+)
 from src.modules.ferlo.logic.machines import MACHINES
 from src.shared.db.connection import connect
 
@@ -56,13 +62,34 @@ class FerloController:
             conn.close()
 
     def reassign_program(
-        self, machine: str, started_at: dt.datetime, program_code: int | None
+        self,
+        machine: str,
+        started_at: dt.datetime,
+        program_code: int | None,
+        manual: ManualSetpoint | None = None,
     ) -> CycleResult | None:
         """Asigna o quita el programa de un ciclo ya guardado, y lo reevalúa
-        -acto explícito de una persona, ver `logic/ingest/service.py`."""
+        -acto explícito de una persona, ver `logic/ingest/service.py`. Con
+        `manual`, la consigna es la que tecleó una persona."""
         conn = connect()
         try:
-            return reassign_program(conn, self.settings, machine, started_at, program_code)
+            return reassign_program(
+                conn, self.settings, machine, started_at, program_code, manual
+            )
+        finally:
+            conn.close()
+
+    def reassign_programs(
+        self,
+        cycles: list[tuple[str, dt.datetime]],
+        program_code: int | None,
+        manual: ManualSetpoint | None = None,
+    ) -> int:
+        """Asigna o quita el programa de varios ciclos a la vez, sobre la
+        selección de la pestaña de Ciclos. Devuelve cuántos se reasignaron."""
+        conn = connect()
+        try:
+            return reassign_programs(conn, self.settings, cycles, program_code, manual)
         finally:
             conn.close()
 
