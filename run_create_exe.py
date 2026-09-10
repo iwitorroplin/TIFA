@@ -27,11 +27,26 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 PROJECT_ROOT = Path(__file__).resolve().parent
 
-APP_NAME = "TIFA"
+CONFIG = PROJECT_ROOT / "config"
+CONFIG_DEFAULT = PROJECT_ROOT / "config" / "appConfigDefault" / "appConfig.default.yaml"
+
+
+def _read_app_info() -> tuple[str, str]:
+    with CONFIG_DEFAULT.open("r", encoding="utf-8") as handle:
+        app = yaml.safe_load(handle)["app"]
+    return app["name"], app["version"]
+
+
+APP_NAME_BASE, APP_VERSION = _read_app_info()
+APP_NAME = f"{APP_NAME_BASE}-{APP_VERSION}"
+
 ENTRY_POINT = PROJECT_ROOT / "run_app.py"
 ICON = PROJECT_ROOT / "assets" / "icons" / "app.ico"
+
 
 BUILD_DIR = PROJECT_ROOT / "build" / "pyinstaller"
 DIST_DIR = PROJECT_ROOT / "dist"

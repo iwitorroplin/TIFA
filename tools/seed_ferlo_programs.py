@@ -35,7 +35,7 @@ from src.modules.ferlo.logic.analysis.programs import upsert_program  # noqa: E4
 from src.shared.db.connection import connect  # noqa: E402
 
 # Base de datos en producción (dentro del ejecutable empaquetado en dist/).
-DB_PATH = Path(r"C:\Users\scadaferlo\dev\TIFA\dist\TIFA\data\tifa.db")
+DB_PATH = Path(r"C:\Users\scadaferlo\dev\TIFA\dist\TIFA-0.2.3\data\tifa.db")
 
 # (código, nombre, formato, tiempo consigna en min, temperatura en ºC).
 # Copiado de `programas_ferlo.md`; los códigos que allí están en blanco

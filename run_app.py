@@ -1,5 +1,5 @@
 """
-Punto de entrada para correr en modo desarrollo:
+Punto de entrada en modo desarrollo:
 
 python run_app.py
 
