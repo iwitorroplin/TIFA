@@ -2,9 +2,9 @@ from PySide6.QtGui import QPainter, QPixmap, Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from src.shared.config.app_config import load_settings as load_app_settings
-from src.shared.assets.resources import (
-    MIDGAR_IMAGE,
-    APP_LOGO_V2,
+from src.shared.assets.paths import (
+    BACKGROUND_HOME,
+    APP_LOGO,
     )
 
 
@@ -19,14 +19,14 @@ class HomeView(QWidget):
         super().__init__()
 
         app_settings = load_app_settings()
-        self._background = QPixmap(str(MIDGAR_IMAGE))
+        self._background = QPixmap(str(BACKGROUND_HOME))
 
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Logo de la app, centrado en la vista
         image_logo = QLabel()
-        image_logo.setPixmap(QPixmap(str(APP_LOGO_V2)))
+        image_logo.setPixmap(QPixmap(str(APP_LOGO)))
         image_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(image_logo)
 

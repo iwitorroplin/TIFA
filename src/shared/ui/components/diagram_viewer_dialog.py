@@ -14,7 +14,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
 
-from src.shared.assets.resources import FERLO_VARIABLES_DIAGRAM
+from src.shared.assets.paths import FERLO_VARIABLES_DIAGRAM
 from src.shared.ui.components.app_button import AppButton
 
 

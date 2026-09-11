@@ -30,5 +30,3 @@ class Module(Enum):
     MACONA = "macona"
     PASTEURIZATION = "pasteurization"
     CONFIG = "config"
-    LOGS = "logs"
-    PRUEBA_UI = "prueba_ui"

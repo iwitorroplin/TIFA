@@ -6,7 +6,7 @@ from PySide6.QtGui import QIcon
 
 from src.modules.registry import MODULES
 from src.shared.db.schema import register_schema
-from src.shared.assets.resources import APP_ICON 
+from src.shared.assets.paths import APP_ICON
 
 from src.app.housekeeping import install_crash_handler, purge_module_logs
 from src.app.tray_app import TrayApp

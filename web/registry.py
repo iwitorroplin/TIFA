@@ -31,10 +31,8 @@ class WebModuleSpec:
     label: str
     router: APIRouter
     ensure_tables: Callable[[sqlite3.Connection], None] | None = None
-    # Color del botón en la navbar (ver templates/base.html). 
+    # Color del botón en la navbar (ver templates/base.html).
     # None = gris por defecto
-    # -mismo valor por defecto que ModuleSpec.color en
-    # src/modules/registry.py, donde solo Home tiene color propio hoy.
     color: str | None = None
 
 

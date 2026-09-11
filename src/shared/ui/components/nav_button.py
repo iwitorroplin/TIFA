@@ -2,17 +2,10 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import QGraphicsDropShadowEffect, QPushButton
 
-from src.shared.assets.resources import (
-    MATERIA_BLUE_IMAGE,
-    MATERIA_YELLOW_IMAGE,
-    )
-
-# MATERIA BLUE PARA BOTON STANDAR
-# MATERIA YELLOW PARA BOTON CON HOVER o CHECKED
-
-
 
 class NavButton(QPushButton):
+    """Base sin elementos por defecto: cada subclase/uso fija su icono y color."""
+
     def __init__(
             self,
             text,
@@ -25,14 +18,8 @@ class NavButton(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setIconSize(QSize(20, 20))
 
-        # Un icono propio (p. ej. el logo en "Home") se queda fijo siempre;
-        # sin icono, el botón usa el punto "materia" que cambia de color
-        # según el estado (ver comentario de arriba).
-        self._fixed_icon = icon is not None
-        self._icon_standard = QIcon(str(icon if icon is not None else MATERIA_BLUE_IMAGE))
-        self._icon_active = self._icon_standard if self._fixed_icon else QIcon(str(MATERIA_YELLOW_IMAGE))
-        self.setIcon(self._icon_standard)
-        self.toggled.connect(self._update_icon)
+        if icon is not None:
+            self.setIcon(QIcon(str(icon)))
 
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(12)
@@ -64,42 +51,31 @@ class NavButton(QPushButton):
             """
         )
 
-    def enterEvent(self, event):
-        super().enterEvent(event)
-        self._update_icon()
 
-    def leaveEvent(self, event):
-        super().leaveEvent(event)
-        self._update_icon()
+class NavModuleButton(NavButton):
+    """Pestaña de navegación de un módulo: entra en el grupo exclusivo del caller."""
 
-    def _update_icon(self, *_):
-        if self._fixed_icon:
-            return
-        active = self.underMouse() or self.isChecked()
-        self.setIcon(self._icon_active if active else self._icon_standard)
+    def __init__(self, label, icon=None, color=None):
+        super().__init__(label, icon=icon, color=color, checkable=True)
 
 
-def add_nav_button(layout, group, label, icon=None, color=None, checkable=True, callback=None):
-    """Crea un NavButton y lo añade a `layout`/`group`. Punto de entrada
-    compartido por Navbar y TabBar para no repetir el cableado.
+class NavExitButton(NavButton):
+    """Botón de acción "Salir": no es checkable ni entra en el grupo exclusivo."""
 
-    Con `callback` es una acción suelta (p. ej. "Salir"): no entra en el
-    grupo exclusivo y se ancla al final, bajo el stretch. Sin `callback`
-    es una pestaña de navegación: entra en el grupo exclusivo, se marca
-    sola si es la primera, y se inserta antes del stretch.
+    def __init__(self, callback):
+        super().__init__("Salir", icon=None, color="#ca4646", checkable=False)
+        self.clicked.connect(callback)
+
+
+def add_nav_button(layout, group, label, icon=None, color=None):
     """
-    is_action = callback is not None
-    button = NavButton(
-        label,
-        icon=icon,
-        color=color,
-        checkable=False if is_action else checkable,
-    )
+    Crea un NavModuleButton y lo agrega al grupo exclusivo.
+    Compartido por Navbar y TabBar.
 
-    if is_action:
-        button.clicked.connect(callback)
-        layout.addWidget(button)
-        return button
+    Entra en el grupo exclusivo, se marca solo si es el primero,
+    y se inserta antes del stretch.
+    """
+    button = NavModuleButton(label, icon=icon, color=color)
 
     index = len(group.buttons())
     group.addButton(button, index)

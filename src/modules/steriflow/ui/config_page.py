@@ -26,7 +26,7 @@ from src.modules.steriflow.logic.network import MachineStatus
 from src.modules.steriflow.logic.settings_editor import SaveStatus, SettingsIssue, validate_autoclave
 from src.modules.steriflow.messages import catalog
 from src.modules.steriflow.ui.config_presenter import SteriflowConfigPresenter
-from src.shared.assets.resources import MATERIA_GREEN_IMAGE, MATERIA_RED_IMAGE, MATERIA_YELLOW_IMAGE
+from src.shared.assets.paths import STATUS_GREEN, STATUS_RED, STATUS_YELLOW
 from src.shared.messages.notice import announce, push
 from src.shared.messages.types import Module
 from src.shared.ui.components.app_button import (
@@ -55,9 +55,9 @@ _COL_STATUS = 7
 # con el resumen de conectividad de home_page); el icono es decoración pura,
 # se queda aquí.
 _STATUS_ICONS = {
-    MachineStatus.ONLINE: MATERIA_GREEN_IMAGE,
-    MachineStatus.OFFLINE: MATERIA_RED_IMAGE,
-    MachineStatus.CONNECTION_ERROR: MATERIA_YELLOW_IMAGE,
+    MachineStatus.ONLINE: STATUS_GREEN,
+    MachineStatus.OFFLINE: STATUS_RED,
+    MachineStatus.CONNECTION_ERROR: STATUS_YELLOW,
 }
 
 _STATUS_REFRESH_INTERVAL_MS = 30_000

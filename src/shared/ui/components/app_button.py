@@ -2,14 +2,14 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import QPushButton, QToolButton
 
-from src.shared.assets.resources import (
-    ADD_IMAGE,
-    DELETE_IMAGE,
-    FOLDER_IMAGE,
-    MATERIA_STARTER_IMAGE,
-    MATERIA_STOP_IMAGE,
-    MODIFY_IMAGE,
-    SAVE_IMAGE,
+from src.shared.assets.paths import (
+    ACTION_ADD,
+    ACTION_DELETE,
+    ACTION_EDIT,
+    ACTION_FOLDER,
+    ACTION_SAVE,
+    ACTION_START,
+    ACTION_STOP,
 )
 
 from src.shared.messages.types import MessageType
@@ -84,7 +84,7 @@ class _AppIconButton(QToolButton):
 class AppFolderButton(_AppIconButton):
     """Boton con icono de carpeta. Abre `path` al pulsarlo."""
 
-    _icon_path = FOLDER_IMAGE
+    _icon_path = ACTION_FOLDER
 
     def __init__(self, text, path, logger, create=False, color="#4d88cb"):
         super().__init__(text, color)
@@ -105,12 +105,12 @@ class AppFolderButton(_AppIconButton):
 
 class AppStartButton(_AppIconButton):
     # boton con icono de materia start, para acciones de backup
-    _icon_path = MATERIA_STARTER_IMAGE
+    _icon_path = ACTION_START
 
 
 class AppStopButton(_AppIconButton):
     # boton con icono de materia stop, para detener el backup
-    _icon_path = MATERIA_STOP_IMAGE
+    _icon_path = ACTION_STOP
 
     def __init__(self, text, color="#e20c0c"):
         super().__init__(text, color)
@@ -118,7 +118,7 @@ class AppStopButton(_AppIconButton):
 
 class AppSaveButton(_AppIconButton):
     # boton de guardado, para persistir cambios acumulados en un borrador
-    _icon_path = SAVE_IMAGE
+    _icon_path = ACTION_SAVE
 
     def __init__(self, text="Guardar", color="#3fa34d"):
         super().__init__(text, color)
@@ -126,7 +126,7 @@ class AppSaveButton(_AppIconButton):
 
 class AppDeleteButton(_AppIconButton):
     # boton de eliminar, mismo rojo que AppStopButton por convencion de la app
-    _icon_path = DELETE_IMAGE
+    _icon_path = ACTION_DELETE
 
     def __init__(self, text="Eliminar", color="#e20c0c"):
         super().__init__(text, color)
@@ -134,7 +134,7 @@ class AppDeleteButton(_AppIconButton):
 
 class AppModifyButton(_AppIconButton):
     # boton de modificar/editar un elemento existente
-    _icon_path = MODIFY_IMAGE
+    _icon_path = ACTION_EDIT
 
     def __init__(self, text="Modificar", color="#4d88cb"):
         super().__init__(text, color)
@@ -142,7 +142,7 @@ class AppModifyButton(_AppIconButton):
 
 class AppAddButton(_AppIconButton):
     # boton de anadir un elemento nuevo
-    _icon_path = ADD_IMAGE
+    _icon_path = ACTION_ADD
 
     def __init__(self, text="Añadir", color="#4d88cb"):
         super().__init__(text, color)

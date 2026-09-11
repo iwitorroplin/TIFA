@@ -1,12 +1,12 @@
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from src.shared.assets.resources import TRAY_ICON
+from src.shared.assets.paths import APP_ICON
 
 
 class TrayApp(QSystemTrayIcon):
     def __init__(self, window):
-        super().__init__(QIcon(str(TRAY_ICON)))
+        super().__init__(QIcon(str(APP_ICON)))
         self._window = window
         self.setToolTip("TIFA")
 

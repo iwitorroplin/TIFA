@@ -4,7 +4,7 @@ from PySide6.QtSvg import QSvgRenderer
 
 from src.shared.characters.senders import MessageSender
 
-# Los retratos (assets/images/characters/*.svg) son solo dos colores: fondo
+# Los retratos (assets/svg/characters/*.svg) son solo dos colores: fondo
 # blanco ("background") y tinta negra ("shape"). En vez de mantener un SVG
 # por personaje y color, se retiñe el fondo en tiempo real.
 _WHITE_FILL = "fill:#ffffff"

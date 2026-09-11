@@ -37,7 +37,7 @@ from src.shared.messages.types import MessageType
 from . import archive, repo
 from .checks import check_rows
 from .normalize import build_series, parse_timestamp
-from .reader import read_raw_rows
+from .reader import ReadReport, read_raw_rows
 
 
 @dataclass(slots=True)
@@ -91,7 +91,16 @@ def import_machine(
             csv_path.unlink()
             continue
 
-        rows = read_raw_rows(csv_path)
+        report = ReadReport()
+        rows = read_raw_rows(csv_path, report)
+        if not report.is_default_format:
+            log.log(f"{csv_path.name} - detectado formato distinto del habitual "
+                    f"(delimitador {report.delimiter!r}, codificación {report.encoding})")
+        if report.rejected:
+            ejemplos = ", ".join(repr(v) for v in report.rejected_samples)
+            log.log(f"{csv_path.name} - {report.rejected} fila(s) con fecha ilegible "
+                    f"descartada(s) (ejemplos: {ejemplos})", level=MessageType.WARNING)
+
         if not rows:
             log.log(f"{csv_path.name} sin filas, se omite", level=MessageType.WARNING)
             csv_path.unlink()

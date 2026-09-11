@@ -1,8 +1,28 @@
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QApplication, QButtonGroup, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QButtonGroup,
+    QVBoxLayout,
+    QWidget
+)
 
 from src.modules.registry import MODULES
-from src.shared.ui.components.nav_button import add_nav_button as _add_nav_button
+from src.shared.assets.paths import ACTION_SETTING, NAV_HOME, NAV_MODULE
+from src.shared.messages.types import Module
+from src.shared.ui.components.nav_button import NavExitButton, add_nav_button as _add_nav_button
+
+# Apariencia (icono/color) del botón de nav de cada módulo. registry.py solo
+# describe módulos (id, view, logs); esto es presentación pura del navbar, y
+# vive aquí porque Navbar es su único consumidor. Un módulo ausente aquí cae
+# al icono/color por defecto de NavButton.
+_NAV_STYLE: dict[Module, tuple] = {
+    Module.HOME: (NAV_HOME, "#3f51b5"),
+    Module.FERLO: (NAV_MODULE, None),
+    Module.STERIFLOW: (NAV_MODULE, None),
+    Module.MACONA: (NAV_MODULE, None),
+    Module.PASTEURIZATION: (NAV_MODULE, None),
+    Module.CONFIG: (ACTION_SETTING, None),
+}
 
 
 class Navbar(QWidget):
@@ -15,7 +35,7 @@ class Navbar(QWidget):
 
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(8, 8, 8, 8)
-        self._layout.setSpacing(4)
+        self._layout.setSpacing(10)
         self._layout.addStretch()
 
         self._group = QButtonGroup(self)
@@ -25,18 +45,19 @@ class Navbar(QWidget):
         # Un botón por módulo registrado, en su mismo orden (ver
         # src/modules/registry.py); MainWindow apila sus páginas con el
         # mismo recorrido, así que el índice de cada botón siempre coincide
-        # con el de su página sin mantener dos listas a mano.
-        for spec in MODULES:
-            self.add_nav_button(spec.label, spec.icon, color=spec.color)
-        self.add_nav_button("Salir", color="#ca4646", callback=QApplication.quit)
 
-    def add_nav_button(self, label, icon=None, color=None, checkable=True, callback=None):
+        for spec in MODULES:
+            icon, color = _NAV_STYLE.get(spec.id, (None, None))
+            self.add_nav_button(spec.label, icon, color=color)
+
+        exit_button = NavExitButton(QApplication.quit)
+        self._layout.addWidget(exit_button)
+
+    def add_nav_button(self, label, icon=None, color=None):
         return _add_nav_button(
             self._layout,
             self._group,
             label,
             icon=icon,
             color=color,
-            checkable=checkable,
-            callback=callback,
         )

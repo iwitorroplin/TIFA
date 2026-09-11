@@ -19,5 +19,14 @@ class TabBar(QWidget):
         self._group.setExclusive(True)
         self._group.idClicked.connect(self.currentChanged)
 
-    def add_item(self, label, icon=None, color=None):
-        return add_nav_button(self._layout, self._group, label, icon=icon, color=color or "#595f66")
+    def add_item(
+            self, 
+            label, 
+            icon=None, 
+            color=None
+        ):
+        return add_nav_button(
+            self._layout, 
+            self._group, label, 
+            icon=icon, 
+            color=color or "#595f66")

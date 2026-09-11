@@ -150,22 +150,30 @@ class SteriflowDataPage(QWidget):
         self._sort_combo.currentIndexChanged.connect(self._on_filters_changed)
 
         self._date_from_checkbox = QCheckBox("Desde:")
-        self._date_from_checkbox.toggled.connect(self._on_date_filter_toggled)
         self._date_from_edit = QDateEdit(QDate.currentDate())
         self._date_from_edit.setCalendarPopup(True)
         self._date_from_edit.setEnabled(False)
         self._date_from_edit.dateChanged.connect(self._on_filters_changed)
-        # Por defecto se filtra desde hoy: abrir la pestaña y ver todo el
-        # histórico de golpe es tanto más lento como menos útil que partir del
-        # día en curso.
-        self._date_from_checkbox.setChecked(True)
 
         self._date_to_checkbox = QCheckBox("Hasta:")
-        self._date_to_checkbox.toggled.connect(self._on_date_filter_toggled)
         self._date_to_edit = QDateEdit(QDate.currentDate())
         self._date_to_edit.setCalendarPopup(True)
         self._date_to_edit.setEnabled(False)
         self._date_to_edit.dateChanged.connect(self._on_filters_changed)
+
+        # Por defecto se filtra desde hoy: abrir la pestaña y ver todo el
+        # histórico de golpe es tanto más lento como menos útil que partir del
+        # día en curso. Se marca ANTES de conectar `toggled` -si no, dispara
+        # `_on_date_filter_toggled`/`_on_filters_changed` en plena
+        # construcción, cuando widgets de más abajo en `__init__`
+        # (`_needs_review_checkbox`, la tabla, la paginación) todavía no
+        # existen-. El enable visual se aplica a mano; el primer `_refresh()`
+        # real ya lo hace `showEvent`.
+        self._date_from_checkbox.setChecked(True)
+        self._date_from_edit.setEnabled(True)
+
+        self._date_from_checkbox.toggled.connect(self._on_date_filter_toggled)
+        self._date_to_checkbox.toggled.connect(self._on_date_filter_toggled)
 
         self._needs_review_checkbox = QCheckBox("Solo pendientes de revisión")
         self._needs_review_checkbox.toggled.connect(self._on_filters_changed)

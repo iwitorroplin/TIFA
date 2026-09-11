@@ -3,7 +3,12 @@ from pathlib import Path
 
 from PySide6.QtGui import QColor
 
-from src.shared.assets.resources import CLOUD, SEPHIROTH, TIFA, YUFI
+from src.shared.assets.paths import (
+    CHARACTERS_CLOUD,
+    CHARACTERS_SEPHIROTH,
+    CHARACTERS_TIFA,
+    CHARACTERS_YUFI,
+)
 from src.shared.messages.types import MessageType
 
 
@@ -20,10 +25,10 @@ class MessageSender:
 # warning -> Cloud
 # error -> Sephiroth
 SENDERS: dict[MessageType, MessageSender] = {
-    MessageType.INFO: MessageSender("Yufi", YUFI),
-    MessageType.SUCCESS: MessageSender("Tifa", TIFA),
-    MessageType.WARNING: MessageSender("Cloud", CLOUD),
-    MessageType.ERROR: MessageSender("Sephiroth", SEPHIROTH),
+    MessageType.INFO: MessageSender("Yufi", CHARACTERS_YUFI),
+    MessageType.SUCCESS: MessageSender("Tifa", CHARACTERS_TIFA),
+    MessageType.WARNING: MessageSender("Cloud", CHARACTERS_CLOUD),
+    MessageType.ERROR: MessageSender("Sephiroth", CHARACTERS_SEPHIROTH),
 }
 
 # Color de acento por tipo de mensaje: tiñe el fondo del retrato, el marco
