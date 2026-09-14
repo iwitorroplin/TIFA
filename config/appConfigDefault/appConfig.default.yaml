@@ -1,7 +1,7 @@
 app:
   name: TIFA
   description: Thermal Integration & F₀ Analysis
-  version: "0.2.3"
+  version: "0.3.0"
   language: es
   theme: system
 
