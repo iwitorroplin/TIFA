@@ -14,6 +14,7 @@ from src.shared.assets.paths import (
     ACTION_STOP,
     ACTION_DEFAULT,
     STATUS_GREY,
+    NAV_EXIT
 )
 
 from src.shared.messages.types import MessageType
@@ -159,6 +160,14 @@ class AppDefaultButton (_AppIconButton):
     _icon_path = ACTION_DEFAULT
 
     def __init__(self, text="Default", color="#663781"):
+        super().__init__(text, color)
+
+class AppExitButton (_AppIconButton):
+    # boton EXIT
+
+    _icon_path = NAV_EXIT
+
+    def __init__(self, text="Salir", color="#e20c0c"):
         super().__init__(text, color)
 
 

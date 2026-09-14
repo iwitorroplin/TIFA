@@ -7,9 +7,9 @@ class PathsGroup(QGroupBox):
     """Grupo "Rutas": carpeta raíz local y de servidor. Cambios puntuales, se
     notifican vía `on_change` para que la página marque el borrador sucio."""
 
-    def __init__(self, presenter, on_change, parent=None):
+    def __init__(self, view_model, on_change, parent=None):
         super().__init__("Rutas", parent)
-        self._presenter = presenter
+        self._view_model = view_model
         self._on_change = on_change
 
         self._local_root_edit = QLineEdit()
@@ -48,13 +48,13 @@ class PathsGroup(QGroupBox):
             on_change()
 
     def _on_local_root_edited(self):
-        self._presenter.set_local_root(self._local_root_edit.text().strip())
+        self._view_model.set_local_root(self._local_root_edit.text().strip())
         self._on_change()
 
     def _on_server_root_edited(self):
-        self._presenter.set_server_root(self._server_root_edit.text().strip())
+        self._view_model.set_server_root(self._server_root_edit.text().strip())
         self._on_change()
 
     def repaint(self):
-        self._local_root_edit.setText(self._presenter.local_root())
-        self._server_root_edit.setText(self._presenter.server_root())
+        self._local_root_edit.setText(self._view_model.local_root())
+        self._server_root_edit.setText(self._view_model.server_root())

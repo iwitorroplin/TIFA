@@ -2,6 +2,7 @@ from PySide6.QtCore import QDate, QTimer
 from PySide6.QtWidgets import QCheckBox, QDateEdit, QHBoxLayout, QLabel, QLineEdit, QWidget
 
 from src.shared.ui.components.app_button import AppButton
+from src.shared.ui.components.multi_select_combo_box import MultiSelectComboBox
 
 # Al escribir en el filtro de producto se espera a que el usuario pare de
 # teclear antes de volver a consultar la base de datos, para no lanzar una
@@ -12,12 +13,12 @@ _FILTER_DEBOUNCE_MS = 300
 class FiltersRow(QWidget):
     """Fila de filtros: producto, autoclave, dirección/rango de fechas y
     pendientes de revisión. Llama a `on_change` (debounced en el texto de
-    producto) cada vez que cambia algo; el presenter se consulta a través de
-    `presenter.autoclaves()` para construir los checkboxes por autoclave."""
+    producto) cada vez que cambia algo; el view model se consulta a través de
+    `view_model.autoclaves()` para cargar el combo de autoclaves."""
 
-    def __init__(self, presenter, on_change, parent=None):
+    def __init__(self, view_model, on_change, parent=None):
         super().__init__(parent)
-        self._presenter = presenter
+        self._view_model = view_model
         self._on_change = on_change
 
         self._filter_debounce = QTimer(self)
@@ -29,16 +30,9 @@ class FiltersRow(QWidget):
         self._product_filter_edit.setPlaceholderText("Buscar producto...")
         self._product_filter_edit.textChanged.connect(self._filter_debounce.start)
 
-        self._autoclave_checkboxes: list[tuple[int, QCheckBox]] = []
-        autoclave_filter_row = QWidget()
-        autoclave_filter_layout = QHBoxLayout(autoclave_filter_row)
-        autoclave_filter_layout.setContentsMargins(0, 0, 0, 0)
-        for nombre, codigo in self._presenter.autoclaves():
-            checkbox = QCheckBox(nombre)
-            checkbox.setChecked(True)
-            checkbox.toggled.connect(self._on_change)
-            self._autoclave_checkboxes.append((codigo, checkbox))
-            autoclave_filter_layout.addWidget(checkbox)
+        self._autoclave_combo = MultiSelectComboBox()
+        self._autoclave_combo.add_items(self._view_model.autoclaves(), checked=True)
+        self._autoclave_combo.selection_changed.connect(self._on_change)
 
         self._date_direction_checkbox = QCheckBox("Más antiguos primero")
         self._date_direction_checkbox.toggled.connect(self._on_change)
@@ -79,7 +73,7 @@ class FiltersRow(QWidget):
         layout.addWidget(QLabel("Producto:"))
         layout.addWidget(self._product_filter_edit)
         layout.addWidget(QLabel("Autoclave:"))
-        layout.addWidget(autoclave_filter_row)
+        layout.addWidget(self._autoclave_combo)
         layout.addWidget(self._date_direction_checkbox)
         layout.addWidget(self._date_from_checkbox)
         layout.addWidget(self._date_from_edit)
@@ -102,8 +96,7 @@ class FiltersRow(QWidget):
         # resetear la dirección dentro de cada grupo.
         self._filter_debounce.stop()
         self._product_filter_edit.clear()
-        for _, checkbox in self._autoclave_checkboxes:
-            checkbox.setChecked(True)
+        self._autoclave_combo.select_all()
         self._date_direction_checkbox.setChecked(False)
         self._date_from_edit.setDate(QDate.currentDate())
         self._date_to_checkbox.setChecked(False)
@@ -115,18 +108,17 @@ class FiltersRow(QWidget):
         else:
             self._date_from_checkbox.setChecked(True)
 
-    def _selected_autoclave_codes(self) -> list[int]:
-        return [codigo for codigo, checkbox in self._autoclave_checkboxes if checkbox.isChecked()]
-
-    def apply_to_presenter(self):
-        """Vuelca el estado actual de los filtros al presenter. Se llama
+    def apply_to_view_model(self):
+        """Vuelca el estado actual de los filtros al view model. Se llama
         antes de cada refresco (`on_change` ya lo dispara), nunca al revés:
         los widgets son la fuente de verdad de lo que el usuario ve marcado."""
-        self._presenter.set_product_query(self._product_filter_edit.text().strip())
-        self._presenter.set_autoclave_codes(self._selected_autoclave_codes())
-        self._presenter.set_started_at_ascending(self._date_direction_checkbox.isChecked())
-        self._presenter.set_date_range(
+        self._view_model.set_product_query(self._product_filter_edit.text().strip())
+        self._view_model.set_autoclave_codes(
+            None if self._autoclave_combo.is_all_selected() else self._autoclave_combo.selected_values()
+        )
+        self._view_model.set_started_at_ascending(self._date_direction_checkbox.isChecked())
+        self._view_model.set_date_range(
             self._date_from_edit.date().toPython() if self._date_from_checkbox.isChecked() else None,
             self._date_to_edit.date().toPython() if self._date_to_checkbox.isChecked() else None,
         )
-        self._presenter.set_needs_review(self._needs_review_checkbox.isChecked())
+        self._view_model.set_needs_review(self._needs_review_checkbox.isChecked())

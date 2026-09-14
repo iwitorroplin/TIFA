@@ -1,6 +1,6 @@
-"""Estado de la pestaña de Configuración que no es un widget: el borrador en
-edición (rutas, autoclaves, horarios). Sin PySide6 -la página lo muta y se
-repinta desde él por un único `_repaint()` propio (ver `SteriflowConfigPage`)-.
+"""View model de la pestaña de Configuración: el borrador en edición (rutas,
+autoclaves, horarios, columnas). Sin PySide6 -la página lo muta y se repinta
+desde él por un único `_repaint()` propio (ver `SteriflowConfigPage`)-.
 
 El estado de red de cada autoclave ya no vive aquí: se muestra y se
 comprueba desde el groupbox de estado de la home page.
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from src.modules.steriflow.logic.controller import SteriflowController
 
 
-class SteriflowConfigPresenter:
+class SteriflowConfigViewModel:
     def __init__(self, controller: SteriflowController) -> None:
         self._controller = controller
         self._draft = self._draft_from_settings()

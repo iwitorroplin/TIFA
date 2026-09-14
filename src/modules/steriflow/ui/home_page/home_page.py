@@ -21,7 +21,7 @@ from src.shared.ui.components.app_button import (
     AppStatusButton,
 )
 
-from src.shared.ui.formatting import format_moment
+from src.shared.utils.formatting import format_moment
 from src.modules.steriflow.messages import catalog
 from src.shared.messages.notice import announce, push
 from src.shared.messages.types import Module

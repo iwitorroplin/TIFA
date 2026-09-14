@@ -33,9 +33,9 @@ from PySide6.QtWidgets import (
 from src.modules.ferlo.logic.analysis.models import SterilizationProgram
 from src.modules.ferlo.logic.analysis.programs import MANUAL_PROGRAM_CODE, ManualSetpoint
 
-# Centinela de "— sin asignar —", que no es ningún código de programa. Es el
-# mismo papel que juega UNASSIGNED_PROGRAM en data_presenter.py, pero como
-# dato de una fila de la lista.
+# Centinela de "— sin asignar —", que no es ningún código de programa, como
+# dato de una fila de la lista. Un centinela y no None: así "quitar el
+# programa" no se confunde con "no hay nada elegido".
 UNASSIGNED = object()
 
 # Filas visibles sin desplazar. Diez es lo que pidió la planta: entran los

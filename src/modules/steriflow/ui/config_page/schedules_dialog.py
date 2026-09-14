@@ -22,15 +22,15 @@ from src.shared.ui.components.app_button import AppAddButton, AppDeleteButton, A
 class SchedulesDialog(QDialog):
     """Modal "Horarios": tabla de horas de ejecución + alta/edición/baja.
 
-    Edita el borrador del presenter directamente fila a fila (igual que el
+    Edita el borrador del view model directamente fila a fila (igual que el
     resto de grupos de config_page), no acumula un estado propio: cerrar el
     diálogo con la X o con "Cerrar" deja los cambios ya hechos, el guardado
     real sigue siendo cosa del botón "Guardar cambios" de la página."""
 
-    def __init__(self, presenter, on_change, parent=None):
+    def __init__(self, view_model, on_change, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Horarios")
-        self._presenter = presenter
+        self._view_model = view_model
         self._on_change = on_change
 
         self._table = QTableWidget(0, 1)
@@ -71,7 +71,7 @@ class SchedulesDialog(QDialog):
     def _add_row(self):
         dialog = _ScheduleDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._presenter.add_hour(dialog.value().toPython())
+            self._view_model.add_hour(dialog.value().toPython())
             self._on_change()
             self._repaint()
 
@@ -80,11 +80,11 @@ class SchedulesDialog(QDialog):
         if row < 0:
             return
 
-        if not self._presenter.can_remove_hour():
+        if not self._view_model.can_remove_hour():
             push(Module.STERIFLOW, catalog.settings_issue(SettingsIssue.AT_LEAST_ONE_SCHEDULE))
             return
 
-        self._presenter.remove_hour(row)
+        self._view_model.remove_hour(row)
         self._on_change()
         self._repaint()
 
@@ -93,10 +93,10 @@ class SchedulesDialog(QDialog):
         if row < 0:
             return
 
-        hour = self._presenter.hours()[row]
+        hour = self._view_model.hours()[row]
         dialog = _ScheduleDialog(self, time=QTime(hour.hour, hour.minute))
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._presenter.update_hour(row, dialog.value().toPython())
+            self._view_model.update_hour(row, dialog.value().toPython())
             self._on_change()
             self._repaint()
 
@@ -105,7 +105,7 @@ class SchedulesDialog(QDialog):
         current_row = table.currentRow()
 
         table.setRowCount(0)
-        for hour in self._presenter.hours():
+        for hour in self._view_model.hours():
             row = table.rowCount()
             table.insertRow(row)
             self._set_row(row, QTime(hour.hour, hour.minute))

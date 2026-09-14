@@ -4,7 +4,7 @@ from src.modules.steriflow.logic.controller import SteriflowController
 from src.modules.steriflow.logic.logs import agent_logger
 from src.modules.steriflow.logic.settings_editor import SaveStatus
 from src.modules.steriflow.messages import catalog
-from src.modules.steriflow.ui.config_page.config_presenter import SteriflowConfigPresenter
+from src.modules.steriflow.ui.config_page.config_view_model import SteriflowConfigViewModel
 from src.shared.messages.notice import announce, push
 from src.shared.messages.types import Module
 from src.shared.ui.components.app_button import AppButton, AppSaveButton
@@ -19,12 +19,12 @@ class SteriflowConfigPage(QWidget):
     def __init__(self, controller: SteriflowController):
         super().__init__()
 
-        self._presenter = SteriflowConfigPresenter(controller)
+        self._view_model = SteriflowConfigViewModel(controller)
 
         self._dirty = False
 
-        self._paths_group = PathsGroup(self._presenter, self._mark_dirty)
-        self._autoclaves_group = AutoclavesGroup(self._presenter, self._mark_dirty)
+        self._paths_group = PathsGroup(self._view_model, self._mark_dirty)
+        self._autoclaves_group = AutoclavesGroup(self._view_model, self._mark_dirty)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._paths_group)
@@ -55,15 +55,15 @@ class SteriflowConfigPage(QWidget):
         return group
 
     def _open_schedules_dialog(self):
-        dialog = SchedulesDialog(self._presenter, self._mark_dirty, self)
+        dialog = SchedulesDialog(self._view_model, self._mark_dirty, self)
         dialog.exec()
 
     def _open_columns_dialog(self):
-        dialog = ColumnsDialog(self._presenter, self._mark_dirty, self)
+        dialog = ColumnsDialog(self._view_model, self._mark_dirty, self)
         dialog.exec()
 
     def _repaint(self):
-        """Repinta todo desde el presenter, nunca al revés: así la tabla
+        """Repinta todo desde el view model, nunca al revés: así la tabla
         nunca puede desincronizarse de lo que hay realmente en el borrador
         (ver el riesgo de índices desalineados en el histórico del refactor).
         El estado de red de cada autoclave ya no vive aquí: se ve en el
@@ -95,7 +95,7 @@ class SteriflowConfigPage(QWidget):
         self._repaint()
 
     def _on_save_clicked(self):
-        outcome = self._presenter.save()
+        outcome = self._view_model.save()
         self._repaint()
 
         if outcome.status is SaveStatus.INVALID:
@@ -113,7 +113,7 @@ class SteriflowConfigPage(QWidget):
         self._save_button.setEnabled(False)
 
     def _on_discard_clicked(self):
-        self._presenter.load()
+        self._view_model.load()
         self._repaint()
         self._dirty = False
         self._save_button.setEnabled(False)

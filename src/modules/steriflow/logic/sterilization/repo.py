@@ -187,10 +187,17 @@ def _build_filters(
     clauses = []
     params: list = []
 
-    if autoclave_codes:  # None o vacío -> sin cláusula -> todas
-        placeholders = ", ".join("?" for _ in autoclave_codes)
-        clauses.append(f"autoclave_code IN ({placeholders})")
-        params.extend(autoclave_codes)
+    if autoclave_codes is not None:
+        if autoclave_codes:
+            placeholders = ", ".join("?" for _ in autoclave_codes)
+            clauses.append(f"autoclave_code IN ({placeholders})")
+            params.extend(autoclave_codes)
+        else:
+            # Selección vacía (todas las autoclaves desmarcadas en el combo)
+            # es un filtro real que no debe casar con nada: si no, "quitar
+            # todo" se vería igual que "no tocar el filtro". None sigue
+            # siendo "todas, sin filtrar".
+            clauses.append("0 = 1")
     if product_query:
         clauses.append("product LIKE ? ESCAPE '\\'")
         params.append(f"%{_escape_like(product_query)}%")

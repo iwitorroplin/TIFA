@@ -19,6 +19,7 @@ import datetime as dt
 import json
 import sqlite3
 from dataclasses import dataclass
+from typing import Sequence
 
 from src.shared.db.iso import from_iso, to_iso
 
@@ -280,16 +281,24 @@ _CYCLE_SELECT = (
 
 def _cycle_filters_sql(
     *,
-    machine: str | None,
+    machines: Sequence[str] | None,
     date_from: dt.date | None,
     date_to: dt.date | None,
     needs_review: bool | None,
 ) -> tuple[str, list]:
     clauses: list[str] = []
     params: list = []
-    if machine:
-        clauses.append("c.machine = ?")
-        params.append(machine)
+    if machines is not None:
+        if machines:
+            placeholders = ", ".join("?" for _ in machines)
+            clauses.append(f"c.machine IN ({placeholders})")
+            params.extend(machines)
+        else:
+            # Selección vacía (todas las máquinas desmarcadas en el combo)
+            # es un filtro real que no debe casar con nada: si no, "quitar
+            # todo" se vería igual que "no tocar el filtro". None sigue
+            # siendo "todas, sin filtrar".
+            clauses.append("0 = 1")
     if date_from is not None:
         clauses.append("c.started_at >= ?")
         params.append(to_iso(dt.datetime.combine(date_from, dt.time.min)))
@@ -308,13 +317,13 @@ def _cycle_filters_sql(
 def count_cycles(
     conn: sqlite3.Connection,
     *,
-    machine: str | None = None,
+    machines: Sequence[str] | None = None,
     date_from: dt.date | None = None,
     date_to: dt.date | None = None,
     needs_review: bool | None = None,
 ) -> int:
     where, params = _cycle_filters_sql(
-        machine=machine, date_from=date_from, date_to=date_to, needs_review=needs_review
+        machines=machines, date_from=date_from, date_to=date_to, needs_review=needs_review
     )
     fila = conn.execute(f"SELECT COUNT(*) AS n FROM ferlo_cycle c{where}", params).fetchone()
     return fila["n"]
@@ -323,7 +332,7 @@ def count_cycles(
 def list_cycles(
     conn: sqlite3.Connection,
     *,
-    machine: str | None = None,
+    machines: Sequence[str] | None = None,
     date_from: dt.date | None = None,
     date_to: dt.date | None = None,
     needs_review: bool | None = None,
@@ -331,7 +340,7 @@ def list_cycles(
     offset: int = 0,
 ) -> list[CycleRow]:
     where, params = _cycle_filters_sql(
-        machine=machine, date_from=date_from, date_to=date_to, needs_review=needs_review
+        machines=machines, date_from=date_from, date_to=date_to, needs_review=needs_review
     )
     filas = conn.execute(
         f"{_CYCLE_SELECT}{where} ORDER BY c.started_at DESC LIMIT ? OFFSET ?",

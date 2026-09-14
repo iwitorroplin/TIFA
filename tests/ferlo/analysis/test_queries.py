@@ -70,10 +70,29 @@ def test_list_cycles_filtra_por_maquina(conn):
     id_f2, _ = _guardar_ciclo(conn, "F2", dt.datetime(2026, 8, 1, 6, 0, 0))
     id_f3, _ = _guardar_ciclo(conn, "F3", dt.datetime(2026, 8, 1, 6, 0, 0))
 
-    filas = repo.list_cycles(conn, machine="F2", limit=50)
+    filas = repo.list_cycles(conn, machines=["F2"], limit=50)
     assert {f.id for f in filas} == {id_f2}
-    assert repo.count_cycles(conn, machine="F3") == 1
+    assert repo.count_cycles(conn, machines=["F3"]) == 1
     assert repo.count_cycles(conn) == 2
+
+
+def test_list_cycles_con_varias_maquinas(conn):
+    id_f2, _ = _guardar_ciclo(conn, "F2", dt.datetime(2026, 8, 1, 6, 0, 0))
+    id_f3, _ = _guardar_ciclo(conn, "F3", dt.datetime(2026, 8, 1, 6, 0, 0))
+    _guardar_ciclo(conn, "F4", dt.datetime(2026, 8, 1, 6, 0, 0))
+
+    filas = repo.list_cycles(conn, machines=["F2", "F3"], limit=50)
+    assert {f.id for f in filas} == {id_f2, id_f3}
+    assert repo.count_cycles(conn, machines=["F2", "F3"]) == 2
+
+
+def test_list_cycles_con_seleccion_vacia_no_devuelve_nada(conn):
+    """Combo con todas las máquinas desmarcadas: es un filtro real -"ninguna"-,
+    no "sin filtrar" (eso es `machines=None`, ver `CycleFilters`)."""
+    _guardar_ciclo(conn, "F2", dt.datetime(2026, 8, 1, 6, 0, 0))
+
+    assert repo.list_cycles(conn, machines=[], limit=50) == []
+    assert repo.count_cycles(conn, machines=[]) == 0
 
 
 def test_list_cycles_filtra_por_rango_de_fechas(conn):

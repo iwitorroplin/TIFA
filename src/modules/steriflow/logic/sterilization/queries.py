@@ -1,5 +1,5 @@
 """Consultas de ciclos de esterilización listas para pintar una página de
-tabla: abre y cierra la conexión aquí, para que ningún widget ni presenter
+tabla: abre y cierra la conexión aquí, para que ningún widget ni view model
 tenga que llamar a `connect()` por su cuenta."""
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from src.shared.db.connection import connect
+from src.shared.utils.paging import Page
 from src.modules.steriflow.logic.sterilization import repo
 from src.modules.steriflow.logic.sterilization.models import SterilizationCycle
 
@@ -18,7 +19,9 @@ class CycleFilters:
     product_query: str | None = None
     # Números reales de autoclave (6..9) a mostrar, no el que imprime el
     # informe: es el que se guarda en el ciclo (ver
-    # `logic/sterilization/service.py`). None o vacío = todas, sin filtrar.
+    # `logic/sterilization/service.py`). None = todas, sin filtrar; una
+    # secuencia vacía es un filtro real que no casa con ningún ciclo (ver
+    # `repo._build_filters`).
     autoclave_codes: Sequence[int] | None = None
     date_from: dt.date | None = None
     date_to: dt.date | None = None
@@ -30,15 +33,7 @@ class CycleFilters:
     started_at_ascending: bool = False
 
 
-@dataclass(frozen=True)
-class CyclePage:
-    cycles: list[SterilizationCycle]
-    total: int
-    page_index: int
-    page_size: int
-
-
-def cycle_page(filters: CycleFilters, *, page_index: int, page_size: int) -> CyclePage:
+def cycle_page(filters: CycleFilters, *, page_index: int, page_size: int) -> Page[SterilizationCycle]:
     """Una página de ciclos y cuántos hay en total con ese filtro.
 
     Una sola conexión para el COUNT y el SELECT: los dos comparten el mismo
@@ -69,4 +64,4 @@ def cycle_page(filters: CycleFilters, *, page_index: int, page_size: int) -> Cyc
     finally:
         conn.close()
 
-    return CyclePage(cycles=cycles, total=total, page_index=page_index, page_size=page_size)
+    return Page(items=cycles, total=total, page_index=page_index, page_size=page_size)

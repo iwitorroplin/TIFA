@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
@@ -17,14 +16,15 @@ from src.modules.ferlo.logic.controller import FerloController
 from src.modules.ferlo.messages import catalog
 from src.modules.ferlo.logic.analysis.programs import MANUAL_PROGRAM_CODE
 from src.modules.ferlo.ui.data_page.assign_program_dialog import AssignProgramDialog
-from src.modules.ferlo.ui.data_page.data_presenter import FerloDataPresenter
+from src.modules.ferlo.ui.data_page.data_view_model import FerloDataViewModel
 from src.modules.ferlo.ui.data_page.detail_dialog import FerloDetailDialog
 from src.shared.messages.notice import push
 from src.shared.messages.types import Module
 from src.shared.ui.components.app_button import AppButton
+from src.shared.ui.components.pagination_row import PaginationRow
+from src.shared.ui.review_highlight import paint_review_row
 
 from src.modules.ferlo.ui.data_page.filters_row import FiltersRow
-from src.modules.ferlo.ui.data_page.pagination_row import PaginationRow
 
 _COL_MACHINE = 0
 _COL_STARTED_AT = 1
@@ -48,24 +48,17 @@ _HEADERS = [
     "Revisión",
 ]
 
-# Mismo criterio visual que Steriflow: fondo y letra fijados los dos, para
-# que se vea igual con tema claro u oscuro.
-_REVIEW_BACKGROUND = QColor(255, 244, 200)
-_REVIEW_FOREGROUND = QColor(90, 60, 0)
-
 
 class FerloDataPage(QWidget):
     def __init__(self, controller: FerloController):
         super().__init__()
 
         self._controller = controller
-        self._presenter = FerloDataPresenter()
+        self._view_model = FerloDataViewModel()
 
         self._cycles_table = self._build_cycles_table()
-        self._filters_row = FiltersRow(controller, self._presenter, self._refresh)
-        self._pagination_row = PaginationRow(
-            self._presenter, self._on_page_size_changed, self._go_previous_page, self._go_next_page
-        )
+        self._filters_row = FiltersRow(controller, self._view_model, self._refresh)
+        self._pagination_row = PaginationRow(self._view_model, self._refresh)
 
         group = QGroupBox("Ciclos")
         group_layout = QVBoxLayout(group)
@@ -146,27 +139,15 @@ class FerloDataPage(QWidget):
 
     def _selected_cycles(self):
         filas = sorted({index.row() for index in self._cycles_table.selectionModel().selectedRows()})
-        return self._presenter.cycles_at(filas)
-
-    def _on_page_size_changed(self, size):
-        self._presenter.set_page_size(size)
-        self._refresh()
-
-    def _go_previous_page(self):
-        if self._presenter.go_previous():
-            self._refresh()
-
-    def _go_next_page(self):
-        if self._presenter.go_next():
-            self._refresh()
+        return self._view_model.items_at(filas)
 
     def _refresh(self):
-        self._filters_row.apply_to_presenter()
-        self._presenter.reload()
+        self._filters_row.apply_to_view_model()
+        self._view_model.reload()
 
         table = self._cycles_table
         table.setRowCount(0)
-        for cycle in self._presenter.cycles():
+        for cycle in self._view_model.items():
             row = table.rowCount()
             table.insertRow(row)
             self._set_cycle_row(row, cycle)
@@ -175,19 +156,16 @@ class FerloDataPage(QWidget):
 
     def _set_cycle_row(self, row, cycle):
         table = self._cycles_table
-        for col, text in enumerate(self._presenter.row_cells(cycle)):
+        for col, text in enumerate(self._view_model.row_cells(cycle)):
             table.setItem(row, col, QTableWidgetItem(text))
 
         if cycle.needs_review:
             if cycle.review_notes:
                 table.item(row, _COL_VERDICT).setToolTip(cycle.review_notes)
-            for col in range(table.columnCount()):
-                item = table.item(row, col)
-                item.setBackground(_REVIEW_BACKGROUND)
-                item.setForeground(_REVIEW_FOREGROUND)
+            paint_review_row(table, row)
 
     def _on_row_double_clicked(self, row, column):
-        cycle = self._presenter.cycle_at(row)
+        cycle = self._view_model.item_at(row)
         if cycle is None:
             return
         dialog = FerloDetailDialog(self._controller, cycle.id, parent=self)

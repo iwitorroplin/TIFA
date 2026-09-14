@@ -40,9 +40,9 @@ _COL_ACTIVE = 6
 class AutoclavesGroup(QGroupBox):
     """Grupo "Autoclaves": tabla + alta/edición/baja mediante `_AutoclaveDialog`."""
 
-    def __init__(self, presenter, on_change, parent=None):
+    def __init__(self, view_model, on_change, parent=None):
         super().__init__("Autoclaves", parent)
-        self._presenter = presenter
+        self._view_model = view_model
         self._on_change = on_change
 
         self._table = QTableWidget(0, 7)
@@ -89,13 +89,13 @@ class AutoclavesGroup(QGroupBox):
     def _add_row(self):
         dialog = _AutoclaveDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._presenter.add_autoclave(_autoclave_from_dialog(dialog))
+            self._view_model.add_autoclave(_autoclave_from_dialog(dialog))
             self._on_change()
 
     def _remove_selected_row(self):
         row = self._table.currentRow()
         if row >= 0:
-            self._presenter.remove_autoclave(row)
+            self._view_model.remove_autoclave(row)
             self._on_change()
 
     def _edit_selected_row(self):
@@ -103,7 +103,7 @@ class AutoclavesGroup(QGroupBox):
         if row < 0:
             return
 
-        autoclave = self._presenter.autoclaves()[row]
+        autoclave = self._view_model.autoclaves()[row]
         dialog = _AutoclaveDialog(
             self,
             name=autoclave.name,
@@ -116,7 +116,7 @@ class AutoclavesGroup(QGroupBox):
             active=autoclave.active,
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._presenter.update_autoclave(row, _autoclave_from_dialog(dialog))
+            self._view_model.update_autoclave(row, _autoclave_from_dialog(dialog))
             self._on_change()
 
     def repaint(self):
@@ -124,7 +124,7 @@ class AutoclavesGroup(QGroupBox):
         current_row = table.currentRow()
 
         table.setRowCount(0)
-        for autoclave in self._presenter.autoclaves():
+        for autoclave in self._view_model.autoclaves():
             row = table.rowCount()
             table.insertRow(row)
             self._set_row(row, autoclave)
