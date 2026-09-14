@@ -43,6 +43,14 @@ def fetch_no_machines_reachable() -> Notice:
     return Notice(MessageType.WARNING, "Importación de las máquinas no realizada: ninguna autoclave respondió")
 
 
+def analyze_finished(incidents: int) -> Notice:
+    return _finished("Análisis de los PDF pendientes realizado", incidents)
+
+
+def no_pending_analysis() -> Notice:
+    return Notice(MessageType.INFO, "No hay PDF pendientes de analizar")
+
+
 def server_backup_finished(incidents: int) -> Notice:
     return _finished("Exportación al servidor realizada", incidents)
 

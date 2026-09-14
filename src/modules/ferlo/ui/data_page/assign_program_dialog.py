@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 
 from src.modules.ferlo.logic.analysis.models import SterilizationProgram
 from src.modules.ferlo.logic.analysis.programs import ManualSetpoint
-from src.modules.ferlo.ui.program_selector import ProgramSelector
+from src.modules.ferlo.ui.data_page.program_selector import ProgramSelector
 
 
 class AssignProgramDialog(QDialog):

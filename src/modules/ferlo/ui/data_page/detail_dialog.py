@@ -36,7 +36,7 @@ from src.modules.ferlo.messages import catalog
 from src.shared.messages.notice import push
 from src.shared.messages.types import Module
 from src.modules.ferlo.logic.analysis.programs import MANUAL_PROGRAM_CODE
-from src.modules.ferlo.ui.program_selector import ProgramSelector
+from src.modules.ferlo.ui.data_page.program_selector import ProgramSelector
 from src.shared.ui.components.app_button import AppSaveButton
 
 _SEVERITY_COLORS = {"info": "#4d88cb", "review": "#c98a00", "error": "#e20c0c"}

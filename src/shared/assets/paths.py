@@ -54,6 +54,9 @@ ACTION_USER = SVG_ACTIONS_DIR / "user.svg"
 ACTION_START = SVG_ACTIONS_DIR / "start.svg"
 ACTION_STOP = SVG_ACTIONS_DIR / "stop.svg"
 ACTION_LIST = SVG_ACTIONS_DIR / "list.svg"
+ACTION_DEFAULT = SVG_ACTIONS_DIR / "default.svg"
+
+
 
 # SVG: DIAGRAMS
 FERLO_VARIABLES_DIAGRAM = SVG_DIAGRAMS_DIR / "ferlo_variables.svg" # diagramas: una vez se limpie y quede correcto se pasara al formato png

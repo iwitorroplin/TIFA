@@ -16,7 +16,7 @@ from src.shared.ui.components.nav_button import NavExitButton, add_nav_button as
 # vive aquí porque Navbar es su único consumidor. Un módulo ausente aquí cae
 # al icono/color por defecto de NavButton.
 _NAV_STYLE: dict[Module, tuple] = {
-    Module.HOME: (NAV_HOME, "#3f51b5"),
+    Module.HOME: (NAV_HOME, None),
     Module.FERLO: (NAV_MODULE, None),
     Module.STERIFLOW: (NAV_MODULE, None),
     Module.MACONA: (NAV_MODULE, None),

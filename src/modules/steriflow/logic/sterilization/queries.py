@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass
+from typing import Sequence
 
 from src.shared.db.connection import connect
 from src.modules.steriflow.logic.sterilization import repo
@@ -15,16 +16,18 @@ from src.modules.steriflow.logic.sterilization.models import SterilizationCycle
 @dataclass(frozen=True)
 class CycleFilters:
     product_query: str | None = None
-    # Número real de la autoclave (6..9), no el que imprime el informe: es el
-    # que se guarda en el ciclo (ver `logic/sterilization/service.py`).
-    autoclave_code: int | None = None
+    # Números reales de autoclave (6..9) a mostrar, no el que imprime el
+    # informe: es el que se guarda en el ciclo (ver
+    # `logic/sterilization/service.py`). None o vacío = todas, sin filtrar.
+    autoclave_codes: Sequence[int] | None = None
     date_from: dt.date | None = None
     date_to: dt.date | None = None
     needs_review: bool | None = None
-    # Agrupar por máquina antes que por fecha. Se ordena en SQL y no sobre la
-    # página ya traída: la tabla está paginada, y ordenar solo las filas
-    # visibles daría un orden distinto en cada página.
-    by_autoclave: bool = False
+    # Dirección de started_at DENTRO de cada grupo de autoclave. El agrupado
+    # por autoclave (ascendente) ya no es opcional -se aplica siempre en
+    # `repo.list_cycles`-, así que esto es lo único que queda por elegir.
+    # False (por defecto) = más reciente primero.
+    started_at_ascending: bool = False
 
 
 @dataclass(frozen=True)
@@ -47,7 +50,7 @@ def cycle_page(filters: CycleFilters, *, page_index: int, page_size: int) -> Cyc
         total = repo.count_cycles(
             conn,
             product_query=filters.product_query,
-            autoclave_code=filters.autoclave_code,
+            autoclave_codes=filters.autoclave_codes,
             date_from=filters.date_from,
             date_to=filters.date_to,
             needs_review=filters.needs_review,
@@ -55,11 +58,11 @@ def cycle_page(filters: CycleFilters, *, page_index: int, page_size: int) -> Cyc
         cycles = repo.list_cycles(
             conn,
             product_query=filters.product_query,
-            autoclave_code=filters.autoclave_code,
+            autoclave_codes=filters.autoclave_codes,
             date_from=filters.date_from,
             date_to=filters.date_to,
             needs_review=filters.needs_review,
-            by_autoclave=filters.by_autoclave,
+            started_at_ascending=filters.started_at_ascending,
             limit=page_size,
             offset=page_index * page_size,
         )

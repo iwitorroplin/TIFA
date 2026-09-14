@@ -19,9 +19,15 @@ from src.modules.ferlo.logic.analysis import repo as analysis_repo
 from src.modules.ferlo.logic.analysis.programs import ManualSetpoint
 from src.modules.ferlo.logic.analysis.models import CycleResult, ManualVerdict, SterilizationProgram
 from src.modules.ferlo.logic.config import Settings, load_settings
+from src.modules.ferlo.logic.ingest import pending as pending_scan
+from src.modules.ferlo.logic.ingest.pending import PendingReport
 from src.modules.ferlo.logic.ingest.service import (
+    BatchSummary,
     ImportSummary,
+    has_archived_months,
+    import_all,
     import_machine,
+    reanalyze_all,
     reassign_program,
     reassign_programs,
 )
@@ -51,6 +57,36 @@ class FerloController:
             return import_machine(conn, self.settings, machine)
         finally:
             conn.close()
+
+    def import_all(self) -> BatchSummary:
+        """Importa y analiza lo pendiente de las cinco máquinas. Igual que
+        `import_machine`, corre en un hilo de fondo."""
+        conn = connect()
+        try:
+            return import_all(conn, self.settings, self.machines)
+        finally:
+            conn.close()
+
+    def check_pending(self) -> PendingReport:
+        """Qué hay esperando en la entrada de cada máquina, sin mover nada."""
+        conn = connect()
+        try:
+            return pending_scan.scan(conn, self.settings, self.machines)
+        finally:
+            conn.close()
+
+    def reanalyze_all(self) -> BatchSummary:
+        """Reanaliza todos los mensuales ya archivados, sin mirar la entrada."""
+        conn = connect()
+        try:
+            return reanalyze_all(conn, self.settings, self.machines)
+        finally:
+            conn.close()
+
+    def has_archived_months(self) -> bool:
+        """Si hay algo que reanalizar -equivalente al `has_pending_analysis()`
+        de Steriflow, pero deducido del archivo en disco, no de un ledger."""
+        return has_archived_months(self.settings, self.machines)
 
     # --- lo que necesita el diálogo de detalle (ui/detail_dialog.py) ---
 

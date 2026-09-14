@@ -16,11 +16,12 @@ las escribe `logic/ingest/service.py` directamente en el log, sin `talk=`
 from __future__ import annotations
 
 from src.modules.ferlo.logic.analysis.models import CycleStatus, ManualVerdict
-from src.modules.ferlo.logic.ingest.service import ImportSummary
+from src.modules.ferlo.logic.ingest.pending import PendingReport
+from src.modules.ferlo.logic.ingest.service import BatchSummary, ImportSummary
 from src.shared.messages.notice import Notice
 from src.shared.messages.types import MessageType
 
-# --- Importación (ui/import_page.py, tasks/import_runner.py) ---
+# --- Importación (ui/home_page/, tasks/import_runner.py) ---
 
 
 def import_no_pending(machine: str) -> Notice:
@@ -50,6 +51,99 @@ def import_busy() -> Notice:
 
 def import_failed(machine: str, error: object) -> Notice:
     return Notice(MessageType.ERROR, f"ERROR importando {machine}: {error}")
+
+
+# --- Acciones sobre las cinco máquinas (ui/home_page/) ---
+
+
+def check_finished(report: PendingReport) -> Notice:
+    """Lo que encontró el check en las entradas. Los ficheros ya llegados se
+    dicen aparte y no cuentan como novedad: son los que la importación va a
+    descartar por sha256 (ver `logic/ingest/pending.py`), y presentarlos como
+    pendientes prometería datos nuevos que no existen."""
+    if not report.machines:
+        return Notice(MessageType.INFO, "No hay máquinas configuradas")
+
+    if report.total_new == 0 and report.total_already_arrived == 0:
+        return Notice(MessageType.INFO, "Nada pendiente en las entradas de las cinco máquinas")
+
+    if report.total_new == 0:
+        return Notice(
+            MessageType.WARNING,
+            f"Sin datos nuevos: los {report.total_already_arrived} fichero(s) de la "
+            "entrada ya se habían importado antes",
+        )
+
+    detalle = ", ".join(
+        f"{m.machine} ({len(m.new_files)})" for m in report.machines if m.has_new
+    )
+    texto = f"{report.total_new} fichero(s) nuevo(s) por importar: {detalle}"
+    if report.total_already_arrived:
+        texto += f" · {report.total_already_arrived} ya visto(s)"
+    return Notice(MessageType.SUCCESS, texto)
+
+
+def _failures_suffix(batch: BatchSummary) -> str:
+    if not batch.failures:
+        return ""
+    maquinas = ", ".join(machine for machine, _ in batch.failures)
+    return f" · falló {maquinas}"
+
+
+def import_all_finished(batch: BatchSummary) -> Notice:
+    """Resultado de importar las cinco máquinas de una pasada.
+
+    Las filas descartadas por solape se dicen siempre que las haya: sin eso,
+    reimportar un CSV que ya venía cubierto se lee como "0 filas nuevas" y no
+    hay forma de distinguirlo de un fichero vacío o mal leído.
+    """
+    if batch.failures and not batch.summaries:
+        return Notice(MessageType.ERROR, f"No se pudo importar ninguna máquina{_failures_suffix(batch)}")
+
+    if batch.total_arrivals == 0:
+        return Notice(
+            MessageType.WARNING if batch.failures else MessageType.INFO,
+            f"Nada pendiente en las entradas{_failures_suffix(batch)}",
+        )
+
+    ya_vistos = sum(
+        1 for s in batch.summaries for a in s.arrivals if a.already_seen
+    )
+    partes = [
+        f"{batch.total_arrivals} fichero(s) de {len(batch.machines_with_arrivals)} máquina(s)",
+    ]
+    if ya_vistos:
+        partes.append(f"{ya_vistos} ya importado(s) antes (mismos bytes)")
+    partes.append(f"{batch.total_new_rows} fila(s) nueva(s)")
+    partes.append(f"{batch.total_cycles} ciclo(s) analizado(s)")
+    if batch.total_duplicate_rows:
+        partes.append(f"{batch.total_duplicate_rows} fila(s) duplicada(s) descartada(s)")
+    texto = ", ".join(partes) + _failures_suffix(batch)
+
+    if batch.failures or batch.total_new_rows == 0:
+        return Notice(MessageType.WARNING, texto)
+    return Notice(MessageType.SUCCESS, texto)
+
+
+def analysis_finished(batch: BatchSummary) -> Notice:
+    if batch.failures and not batch.summaries:
+        return Notice(MessageType.ERROR, f"No se pudo reanalizar ninguna máquina{_failures_suffix(batch)}")
+
+    meses = sum(len(s.cycles_by_month) for s in batch.summaries)
+    texto = f"{batch.total_cycles} ciclo(s) reanalizado(s) en {meses} mes(es)" + _failures_suffix(batch)
+    return Notice(MessageType.WARNING if batch.failures else MessageType.SUCCESS, texto)
+
+
+def no_archived_months() -> Notice:
+    return Notice(MessageType.INFO, "No hay mensuales en el archivo todavía: importa antes.")
+
+
+def action_busy() -> Notice:
+    return Notice(MessageType.WARNING, "Ya hay una acción en curso; espera a que termine.")
+
+
+def action_failed(error: object) -> Notice:
+    return Notice(MessageType.ERROR, f"ERROR en la acción de Ferlo: {error}")
 
 
 # --- Configuración (ui/config_page.py) ---

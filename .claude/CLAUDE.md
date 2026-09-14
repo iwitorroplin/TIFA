@@ -8,3 +8,8 @@ In repositories indexed by CodeGraph (a `.codegraph/` directory exists at the re
 
 If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is the user's decision.
 <!-- CODEGRAPH_END -->
+
+## Code style
+
+- El código debe cumplir con Clean Code y arquitectura hexagonal (ports & adapters): separar dominio, aplicación e infraestructura, y depender de abstracciones (interfaces/puertos) en los límites.
+- Priorizar que el código sea lo más reutilizable posible: evitar duplicación, extraer abstracciones claras y mantener bajo acoplamiento entre capas.

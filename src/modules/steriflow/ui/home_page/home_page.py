@@ -13,10 +13,12 @@ from PySide6.QtWidgets import (
 from src.modules.steriflow.logic.controller import SteriflowController
 from src.modules.steriflow.logic.logs import STERIFLOW_LOGS_ROOT, agent_logger
 from src.modules.steriflow.logic.network import MachineStatus
+from src.shared.assets.paths import STATUS_GREEN, STATUS_GREY, STATUS_RED, STATUS_YELLOW
 from src.shared.ui.components.app_button import (
     AppButton,
     AppFolderButton,
     AppStartButton,
+    AppStatusButton,
 )
 
 from src.shared.ui.formatting import format_moment
@@ -26,6 +28,16 @@ from src.shared.messages.types import Module
 from src.modules.steriflow.tasks.backup_runner import BackupRunner
 from src.modules.steriflow.tasks.status_checker import AutoclaveStatusChecker
 from src.shared.ui.components.loading_overlay import LoadingOverlay
+
+
+# Mismo mapeo que la columna "Estado" de la pestaña Configuración (ver
+# ui/config_page/autoclaves_group.py): iconos de materia, decoración pura, la
+# etiqueta la sigue dando catalog.machine_status_label.
+_STATUS_ICONS = {
+    MachineStatus.ONLINE: STATUS_GREEN,
+    MachineStatus.OFFLINE: STATUS_RED,
+    MachineStatus.CONNECTION_ERROR: STATUS_YELLOW,
+}
 
 
 
@@ -54,6 +66,7 @@ class SteriflowHomePage(QWidget):
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._build_automation_status_group())
+        layout.addWidget(self._build_status_machine_group())
         layout.addWidget(self._build_backup_actions_group())
         layout.addWidget(self._build_open_folders_group())
         layout.addStretch()
@@ -93,6 +106,28 @@ class SteriflowHomePage(QWidget):
 
         return group
 
+    def _build_status_machine_group(self):
+        """Un botón-chip por autoclave activa con su icono de estado (ver
+        _STATUS_ICONS): da de un vistazo lo que antes solo se veía en la
+        columna "Estado" de la pestaña Configuración, y cada chip vuelve a
+        comprobar esa máquina en concreto al pulsarlo, sin relanzar el check
+        de todas (ver _on_status_button_clicked)."""
+        group = QGroupBox("Estado de las autoclaves")
+
+        self._status_buttons: dict[str, AppStatusButton] = {}
+        group_layout = QHBoxLayout(group)
+
+        autoclaves = [a for a in self._controller.settings.autoclaves if a.active]
+        for autoclave in autoclaves:
+            button = AppStatusButton(autoclave.name, STATUS_GREY)
+            button.setToolTip("Sin comprobar todavía. Pulsa para comprobar esta autoclave.")
+            button.clicked.connect(lambda _checked=False, name=autoclave.name: self._on_status_button_clicked(name))
+            self._status_buttons[autoclave.name] = button
+            group_layout.addWidget(button)
+
+        group_layout.addStretch()
+        return group
+
     def _build_backup_actions_group(self):
         group = QGroupBox("Acciones de Backup")
 
@@ -104,14 +139,18 @@ class SteriflowHomePage(QWidget):
         self._fetch_button.setToolTip("Importa los datos (.pdf) de las maquinas a local")
         self._fetch_button.clicked.connect(self._on_fetch_clicked)
 
+        self._analyze_button = AppStartButton("Analizar")
+        self._analyze_button.setToolTip("Extrae el dato de esterilización de los PDF pendientes en local")
+        self._analyze_button.clicked.connect(self._on_analyze_clicked)
 
         self._backup_button = AppStartButton("Export")
-        self._backup_button.setToolTip("Exporta los datos (.pdf) de las maquinas a local")
+        self._backup_button.setToolTip("Exporta los datos (.pdf) de las maquinas al servidor")
         self._backup_button.clicked.connect(self._on_backup_clicked)
 
         group_layout = QHBoxLayout(group)
         group_layout.addWidget(self._check_button)
         group_layout.addWidget(self._fetch_button)
+        group_layout.addWidget(self._analyze_button)
         group_layout.addWidget(self._backup_button)
         group_layout.addStretch()
 
@@ -146,7 +185,24 @@ class SteriflowHomePage(QWidget):
         self._pending_connectivity_checks = {autoclave.name: None for autoclave in autoclaves}
         self._connectivity_checker.check([(a.name, a.ip) for a in autoclaves])
 
+    def _on_status_button_clicked(self, name):
+        # Chip individual: relanza el check solo de esta autoclave, sin
+        # esperar a que las demás terminen ni tapar la página con el overlay
+        # -es una comprobación puntual, no una acción de grupo.
+        button = self._status_buttons.get(name)
+        if button is None:
+            return
+        autoclave = next((a for a in self._controller.settings.autoclaves if a.name == name), None)
+        if autoclave is None:
+            return
+        self._connectivity_checker.check([(autoclave.name, autoclave.ip)])
+
     def _on_connectivity_checked(self, name, status: MachineStatus):
+        button = self._status_buttons.get(name)
+        if button is not None:
+            button.set_icon(_STATUS_ICONS[status])
+            button.setToolTip(catalog.machine_status_label(status))
+
         if name not in self._pending_connectivity_checks:
             return
         self._pending_connectivity_checks[name] = status
@@ -160,6 +216,12 @@ class SteriflowHomePage(QWidget):
 
     def _on_fetch_clicked(self):
         self._backup_runner.run(source="home_page", action=self._controller.backup_service.fetch)
+
+    def _on_analyze_clicked(self):
+        if not self._controller.backup_service.has_pending_analysis():
+            push(Module.STERIFLOW, catalog.no_pending_analysis())
+            return
+        self._backup_runner.run(source="home_page", action=self._controller.backup_service.analyze)
 
     def _on_backup_clicked(self):
         self._backup_runner.run(source="home_page", action=self._controller.backup_service.backup)

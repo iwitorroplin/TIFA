@@ -12,22 +12,11 @@ from typing import Sequence
 
 from src.modules.steriflow.logic.config import load_settings
 from src.modules.steriflow.logic.sterilization import service as sterilization_service
+from src.modules.steriflow.logic.sterilization.columns import CYCLE_COLUMNS, CycleColumn
 from src.modules.steriflow.logic.sterilization.models import SterilizationCycle
 from src.modules.steriflow.logic.sterilization.queries import CycleFilters, CyclePage, cycle_page
 
 DEFAULT_PAGE_SIZE = 50
-
-
-def _format_duration(seconds: int | None) -> str:
-    if seconds is None:
-        return "—"
-    hours, remainder = divmod(int(seconds), 3600)
-    minutes, secs = divmod(remainder, 60)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-
-
-def _format_temp(value: float | None) -> str:
-    return "—" if value is None else f"{value:.2f}"
 
 
 class SteriflowDataPresenter:
@@ -44,15 +33,16 @@ class SteriflowDataPresenter:
         self._filters = dataclasses.replace(self._filters, product_query=text or None)
         self._page_index = 0
 
-    def set_autoclave_code(self, code: int | None) -> None:
-        self._filters = dataclasses.replace(self._filters, autoclave_code=code)
+    def set_autoclave_codes(self, codes: Sequence[int]) -> None:
+        self._filters = dataclasses.replace(self._filters, autoclave_codes=codes or None)
         self._page_index = 0
 
-    def set_by_autoclave(self, by_autoclave: bool) -> None:
-        """Ordenar agrupando por máquina. Vuelve a la primera página igual que
-        un filtro: con otro orden, la página en la que estabas ya no contiene
-        las mismas filas."""
-        self._filters = dataclasses.replace(self._filters, by_autoclave=by_autoclave)
+    def set_started_at_ascending(self, ascending: bool) -> None:
+        """Dirección de `started_at` dentro de cada grupo de autoclave (el
+        agrupado en sí ya no es opcional, ver `repo.list_cycles`). Vuelve a la
+        primera página igual que un filtro: con otro orden, la página en la
+        que estabas ya no contiene las mismas filas."""
+        self._filters = dataclasses.replace(self._filters, started_at_ascending=ascending)
         self._page_index = 0
 
     def autoclaves(self) -> list[tuple[str, int]]:
@@ -120,24 +110,39 @@ class SteriflowDataPresenter:
         cycles = self._page.cycles
         return cycles[row] if 0 <= row < len(cycles) else None
 
-    # --- formateo: las mismas columnas que se ven en pantalla, en texto
-    # plano. `row_cells` es lo que pinta la tabla (última celda: "Revisar" o
-    # vacío, el detalle va en el tooltip); `print_cells` es lo que va a
-    # papel/PDF (última celda: las notas de revisión, sin tooltip posible) ---
+    # --- columnas: mismo conjunto para pantalla e impresión, filtrado según
+    # la configuración guardada (ver logic/sterilization/columns.py) ---
+
+    def visible_columns(self) -> list[CycleColumn]:
+        """Las columnas a pintar, en orden canónico: las fijas siempre, más
+        las opcionales activas en la configuración. Se relee `load_settings()`
+        en cada llamada -igual que `autoclaves()`- para que una configuración
+        de columnas recién guardada se refleje sin necesitar una señal de
+        invalidación aparte."""
+        enabled = load_settings().columns.visible_keys
+        return [col for col in CYCLE_COLUMNS if col.fixed or col.key in enabled]
 
     def row_cells(self, cycle: SterilizationCycle) -> list[str]:
-        return [
-            self.autoclave_label(cycle),
-            cycle.started_at.strftime("%d/%m/%Y %H:%M:%S"),
-            cycle.product,
-            cycle.cycle_number,
-            self.phase_label(cycle),
-            _format_duration(cycle.sterilization_duration_s),
-            _format_temp(cycle.sterilization_temp_mean_c),
-            _format_temp(cycle.sterilization_temp_min_c),
-            _format_temp(cycle.sterilization_temp_max_c),
-            "Revisar" if cycle.needs_review else "",
-        ]
+        """Lo que pinta la tabla en pantalla."""
+        return [col.cell(self, cycle) for col in self.visible_columns()]
+
+    def print_cells(self, cycle: SterilizationCycle) -> list[str]:
+        """Lo que va a papel/PDF: igual que `row_cells`, salvo la celda de
+        Revisión, que en pantalla es "Revisar"/vacío (con el detalle en un
+        tooltip) y aquí son las notas completas -en papel no hay tooltip
+        posible-. Se localiza por clave y no por posición: así una columna
+        movida o desactivada nunca sustituye la celda equivocada."""
+        cells = self.row_cells(cycle)
+        review_index = self._review_column_index()
+        if review_index is not None:
+            cells[review_index] = cycle.review_notes if cycle.needs_review else ""
+        return cells
+
+    def _review_column_index(self) -> int | None:
+        for index, col in enumerate(self.visible_columns()):
+            if col.key == "review":
+                return index
+        return None
 
     def autoclave_label(self, cycle: SterilizationCycle) -> str:
         """El nombre configurado de la máquina. Los ciclos guardados antes de
@@ -161,11 +166,6 @@ class SteriflowDataPresenter:
         if not cycle.sterilization_phase_type:
             return str(cycle.sterilization_phase_number)
         return f"{cycle.sterilization_phase_number} · {cycle.sterilization_phase_type}"
-
-    def print_cells(self, cycle: SterilizationCycle) -> list[str]:
-        cells = self.row_cells(cycle)
-        cells[-1] = cycle.review_notes if cycle.needs_review else ""
-        return cells
 
     # --- PDF ---
 

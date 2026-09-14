@@ -16,6 +16,10 @@
 
 No dispara nada por su cuenta -ni vigilancia de carpeta ni planificador-: lo
 llama un botón (D4) o el script de terminal (`logic/ingest/cli.py`).
+
+`import_machine` es la unidad; `import_all` la repite sobre las cinco máquinas
+sin que una rota corte a las demás, que es lo que pulsa la pantalla de inicio.
+Mirar qué hay pendiente antes de mover nada es `logic/ingest/pending.py`.
 """
 
 from __future__ import annotations
@@ -46,6 +50,14 @@ class ArrivalResult:
     rows: int
     new_rows: int
     already_seen: bool
+    # Tramo que traía el fichero, y cuánto de él ya estaba cubierto por
+    # llegadas anteriores. La deduplicación por rango (ver `_cubierta`) llevaba
+    # descartando filas en silencio: un CSV exportado con un mes de solape
+    # aparecía como "0 filas nuevas" sin decir por qué, que es indistinguible
+    # de un fichero vacío o mal leído.
+    duplicate_rows: int = 0
+    from_ts: dt.datetime | None = None
+    to_ts: dt.datetime | None = None
 
 
 @dataclass(slots=True)
@@ -61,6 +73,10 @@ class ImportSummary:
     @property
     def total_new_rows(self) -> int:
         return sum(a.new_rows for a in self.arrivals)
+
+    @property
+    def total_duplicate_rows(self) -> int:
+        return sum(a.duplicate_rows for a in self.arrivals)
 
     @property
     def total_cycles(self) -> int:
@@ -130,10 +146,19 @@ def import_machine(
         )
         csv_path.unlink()
 
+        duplicadas = len(filas_con_ts) - len(nuevas)
         log.log(f"{csv_path.name} - {len(rows)} filas, "
                 f"{len(nuevas)} nuevas ({chequeo.resumen_texto()})")
+        if duplicadas:
+            log.log(f"{csv_path.name} - {duplicadas} fila(s) descartada(s) por caer en un "
+                    f"tramo ya importado; el fichero abarca "
+                    f"{from_ts:%d/%m/%Y %H:%M} a {to_ts:%d/%m/%Y %H:%M}",
+                    level=MessageType.WARNING)
         resumen.arrivals.append(
-            ArrivalResult(csv_path.name, len(rows), len(nuevas), already_seen=False)
+            ArrivalResult(
+                csv_path.name, len(rows), len(nuevas), already_seen=False,
+                duplicate_rows=duplicadas, from_ts=from_ts, to_ts=to_ts,
+            )
         )
 
     resumen.leftovers_removed = _vaciar_entrada(entrada_dir, log)
@@ -145,6 +170,106 @@ def import_machine(
 
     conn.commit()
     return resumen
+
+
+@dataclass(slots=True)
+class BatchSummary:
+    """Resultado de una acción sobre todas las máquinas a la vez.
+
+    `failures` cuenta máquinas que reventaron, no meses ni ficheros: una
+    máquina con la carpeta de entrada inaccesible no puede impedir que las
+    otras cuatro se importen (mismo criterio que `_fetch_all` de Steriflow),
+    así que el fallo se anota y el bucle sigue.
+    """
+
+    summaries: list[ImportSummary] = field(default_factory=list)
+    failures: list[tuple[str, str]] = field(default_factory=list)
+
+    @property
+    def total_new_rows(self) -> int:
+        return sum(s.total_new_rows for s in self.summaries)
+
+    @property
+    def total_duplicate_rows(self) -> int:
+        return sum(s.total_duplicate_rows for s in self.summaries)
+
+    @property
+    def total_cycles(self) -> int:
+        return sum(s.total_cycles for s in self.summaries)
+
+    @property
+    def total_arrivals(self) -> int:
+        return sum(len(s.arrivals) for s in self.summaries)
+
+    @property
+    def machines_with_arrivals(self) -> list[str]:
+        return [s.machine for s in self.summaries if s.arrivals]
+
+
+def import_all(
+    conn: sqlite3.Connection, settings: Settings, machines: tuple[str, ...]
+) -> BatchSummary:
+    """Importa y analiza lo pendiente de todas las máquinas, de una pasada."""
+    log = agent_logger()
+    lote = BatchSummary()
+    for machine in machines:
+        try:
+            lote.summaries.append(import_machine(conn, settings, machine))
+        except Exception as ex:  # noqa: BLE001 - una máquina rota no corta el resto
+            log.scoped(machine).log(f"No se pudo importar: {ex}", level=MessageType.ERROR)
+            lote.failures.append((machine, str(ex)))
+    return lote
+
+
+def archived_months(settings: Settings, machine: str) -> list[tuple[int, int]]:
+    """Meses que tiene la máquina en el archivo, deducidos del nombre de sus
+    mensuales (`<machine>_M<yyyy><mm>.csv`, ver `archive.monthly_archive_path`):
+    el archivo es la verdad de qué hay, no hace falta una tabla que lo repita."""
+    machine_dir = settings.archivo_dir / machine
+    if not machine_dir.exists():
+        return []
+
+    meses: list[tuple[int, int]] = []
+    for ruta in machine_dir.glob(f"{machine}_M*.csv"):
+        marca = ruta.stem.split("_M")[-1]
+        if len(marca) == 6 and marca.isdigit():
+            meses.append((int(marca[:4]), int(marca[4:])))
+    return sorted(meses)
+
+
+def reanalyze_all(
+    conn: sqlite3.Connection, settings: Settings, machines: tuple[str, ...]
+) -> BatchSummary:
+    """Reanaliza todos los mensuales del archivo, sin mirar la entrada.
+
+    Importar ya reanaliza los meses que acaba de tocar; esto es para cuando lo
+    que cambia no son los datos sino los umbrales de detección (pestaña de
+    Configuración): los ciclos ya guardados se segmentaron con los de antes y
+    solo vuelven a cuadrar releyendo el archivo entero.
+    """
+    log = agent_logger()
+    lote = BatchSummary()
+
+    for machine in machines:
+        resumen = ImportSummary(machine=machine)
+        scoped = log.scoped(machine)
+        try:
+            for anio, mes in archived_months(settings, machine):
+                ciclos = _reanalizar_mes(conn, settings, machine, anio, mes)
+                resumen.cycles_by_month[(anio, mes)] = ciclos
+                scoped.log(f"{anio:04d}-{mes:02d} - {len(ciclos)} ciclos")
+        except Exception as ex:  # noqa: BLE001 - una máquina rota no corta el resto
+            scoped.log(f"No se pudo reanalizar: {ex}", level=MessageType.ERROR)
+            lote.failures.append((machine, str(ex)))
+        else:
+            lote.summaries.append(resumen)
+
+    conn.commit()
+    return lote
+
+
+def has_archived_months(settings: Settings, machines: tuple[str, ...]) -> bool:
+    return any(archived_months(settings, machine) for machine in machines)
 
 
 def _vaciar_entrada(entrada_dir: Path, log) -> int:

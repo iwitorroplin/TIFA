@@ -11,6 +11,20 @@ execution_hours: [
   "20:00"
   ]
 
+# columns.visible: claves de columnas opcionales activas en la tabla de
+# ciclos de esterilización (pantalla e impresión comparten esta lista). Las
+# columnas fijas (Autoclave, Producto, Duración esterilización, T media,
+# Revisión) no se listan aquí: se ven siempre.
+columns:
+  visible:
+    - started_at
+    - cycle_number
+    - phase
+    - sterilization_start_ts
+    - sterilization_end_ts
+    - temp_min
+    - temp_max
+
 auto_enabled: false
 
 # code: numero real de la autoclave, el que se guarda con cada ciclo.

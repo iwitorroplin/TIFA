@@ -3,7 +3,7 @@ from PySide6.QtWidgets import QStackedWidget, QVBoxLayout, QWidget
 from src.modules.ferlo.logic.controller import build_default_controller
 from src.modules.ferlo.ui.config_page import FerloConfigPage
 from src.modules.ferlo.ui.data_page import FerloDataPage
-from src.modules.ferlo.ui.import_page import FerloImportPage
+from src.modules.ferlo.ui.home_page import FerloHomePage
 from src.modules.ferlo.ui.logs_page import FerloLogsPage
 from src.modules.ferlo.ui.tab_bar import FerloTabBar
 
@@ -17,8 +17,7 @@ class FerloView(QWidget):
         self._tabs = FerloTabBar()
         self._pages = QStackedWidget()
         # Orden igual al de FerloTabBar: Home, Configuración, Data, Logs.
-        # FerloImportPage hace de Home -no hay una página "Home" separada-.
-        self._pages.addWidget(FerloImportPage(self._controller))
+        self._pages.addWidget(FerloHomePage(self._controller))
         self._pages.addWidget(FerloConfigPage(self._controller))
         self._pages.addWidget(FerloDataPage(self._controller))
         self._pages.addWidget(FerloLogsPage())

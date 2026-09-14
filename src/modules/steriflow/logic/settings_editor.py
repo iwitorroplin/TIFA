@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 from src.modules.steriflow.logic.config import (
     AutoclaveConfig,
+    ColumnsConfig,
     ScheduleConfig,
     SteriflowPaths,
     SteriflowSettings,
@@ -53,6 +54,7 @@ class SettingsDraft:
     server_root_text: str
     autoclaves: list[AutoclaveConfig]
     execution_hours: list[time]
+    visible_column_keys: set[str]
 
     def to_settings(self, *, auto_enabled: bool) -> SteriflowSettings:
         return SteriflowSettings(
@@ -66,6 +68,7 @@ class SettingsDraft:
             # se verían "distintas" en el dirty-check de apply() y el
             # guardado entraría en bucle cada vez que se abre esta pestaña.
             schedule=ScheduleConfig(execution_hours=sorted(self.execution_hours)),
+            columns=ColumnsConfig(visible_keys=frozenset(self.visible_column_keys)),
             auto_enabled=auto_enabled,
         )
 

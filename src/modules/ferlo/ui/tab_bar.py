@@ -12,7 +12,7 @@ class FerloTabBar(TabBar):
     def __init__(self):
         super().__init__()
 
-        self.add_item("Home", NAV_HOME, color="#3f51b5")
-        self.add_item("Configuración", ACTION_SETTING)
+        self.add_item("Home", NAV_HOME)
         self.add_item("Data", ACTION_DOCUMENT )
+        self.add_item("Configuración", ACTION_SETTING)
         self.add_item("Logs", ACTION_LIST)

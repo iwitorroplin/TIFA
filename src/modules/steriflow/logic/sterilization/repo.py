@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 import sqlite3
+from typing import Sequence
 
 from src.shared.db.iso import from_iso, to_iso
 from src.modules.steriflow.logic.sterilization.models import SterilizationCycle
@@ -31,6 +32,16 @@ def pending_extraction(conn: sqlite3.Connection, autoclave: str) -> list[sqlite3
         " ORDER BY filename",
         (autoclave,),
     ).fetchall()
+
+
+def count_pending_extraction(conn: sqlite3.Connection) -> int:
+    """Cuántos PDF, de cualquier autoclave, aún no se han intentado leer.
+
+    Usado por la acción manual "Analizar" para saber si hay algo que hacer
+    antes de lanzarla."""
+    return conn.execute(
+        "SELECT COUNT(*) AS n FROM steriflow_backup_file WHERE extracted_at IS NULL"
+    ).fetchone()["n"]
 
 
 def mark_extracted(conn: sqlite3.Connection, backup_file_id: int, *, error: str | None = None) -> None:
@@ -104,19 +115,29 @@ def save_cycle(conn: sqlite3.Connection, cycle: SterilizationCycle) -> tuple[int
 def list_cycles(
     conn: sqlite3.Connection,
     *,
-    autoclave_code: int | None = None,
+    autoclave_codes: Sequence[int] | None = None,
     product_query: str | None = None,
     date_from: dt.date | None = None,
     date_to: dt.date | None = None,
     needs_review: bool | None = None,
-    by_autoclave: bool = False,
+    started_at_ascending: bool = False,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[SterilizationCycle]:
-    """Ciclos guardados, del más reciente al más antiguo.
+    """Ciclos guardados, agrupados por autoclave.
 
-    `by_autoclave` agrupa antes por máquina, para poder leer de corrido lo de
-    una autoclave sin perder el orden por fecha dentro de cada una.
+    El agrupado por `autoclave_code` ascendente (6, 7, 8, 9...) ya no es
+    opcional: se aplica siempre, para poder leer de corrido lo de una
+    máquina sin perder el orden por fecha dentro de cada una.
+    `started_at_ascending` solo decide la dirección DENTRO de cada grupo
+    (False por defecto: más reciente primero).
+
+    Se ordena por `started_at` -la fecha de importación del ciclo/PDF,
+    siempre presente- y no por `sterilization_start_ts`: ese dato puede ser
+    NULL en ciclos antiguos o con la fase de esterilización sin leer bien, y
+    un NULL ahí mezclaría esos ciclos de forma poco predecible según el
+    motor. `started_at` es un identificador estable del ciclo (forma parte
+    de la UNIQUE de la tabla) y siempre está.
 
     `limit`/`offset` pagina en la propia consulta: con miles de ciclos
     guardados, cargarlos todos en memoria para pintar una tabla que solo
@@ -125,10 +146,11 @@ def list_cycles(
     solo las 50 filas visibles daría un orden distinto en cada página.
     """
     where, params = _build_filters(
-        autoclave_code=autoclave_code, product_query=product_query,
+        autoclave_codes=autoclave_codes, product_query=product_query,
         date_from=date_from, date_to=date_to, needs_review=needs_review,
     )
-    orden = "autoclave_code, started_at DESC" if by_autoclave else "started_at DESC"
+    direction = "ASC" if started_at_ascending else "DESC"
+    orden = f"autoclave_code ASC, started_at {direction}"
     sql = f"SELECT * FROM steriflow_cycle{where} ORDER BY {orden}"
     if limit is not None:
         sql += " LIMIT ? OFFSET ?"
@@ -140,7 +162,7 @@ def list_cycles(
 def count_cycles(
     conn: sqlite3.Connection,
     *,
-    autoclave_code: int | None = None,
+    autoclave_codes: Sequence[int] | None = None,
     product_query: str | None = None,
     date_from: dt.date | None = None,
     date_to: dt.date | None = None,
@@ -148,7 +170,7 @@ def count_cycles(
 ) -> int:
     """Cuántos ciclos cumplen el filtro, para saber cuántas páginas hay."""
     where, params = _build_filters(
-        autoclave_code=autoclave_code, product_query=product_query,
+        autoclave_codes=autoclave_codes, product_query=product_query,
         date_from=date_from, date_to=date_to, needs_review=needs_review,
     )
     return conn.execute(f"SELECT COUNT(*) AS n FROM steriflow_cycle{where}", params).fetchone()["n"]
@@ -156,7 +178,7 @@ def count_cycles(
 
 def _build_filters(
     *,
-    autoclave_code: int | None,
+    autoclave_codes: Sequence[int] | None,
     product_query: str | None,
     date_from: dt.date | None,
     date_to: dt.date | None,
@@ -165,9 +187,10 @@ def _build_filters(
     clauses = []
     params: list = []
 
-    if autoclave_code is not None:
-        clauses.append("autoclave_code = ?")
-        params.append(autoclave_code)
+    if autoclave_codes:  # None o vacío -> sin cláusula -> todas
+        placeholders = ", ".join("?" for _ in autoclave_codes)
+        clauses.append(f"autoclave_code IN ({placeholders})")
+        params.extend(autoclave_codes)
     if product_query:
         clauses.append("product LIKE ? ESCAPE '\\'")
         params.append(f"%{_escape_like(product_query)}%")

@@ -9,11 +9,21 @@ from dataclasses import dataclass
 from datetime import time
 from pathlib import Path
 
+from src.modules.steriflow.logic.sterilization.columns import CONFIGURABLE_COLUMN_KEYS
 from src.shared.config.manager import ensure_config_file as _ensure_config_file
 from src.shared.config.manager import load_config, save_config
 from src.shared.paths import resolve_path
 
 _MODULE = "steriflow"
+
+
+def _default_columns_visible_keys() -> frozenset[str]:
+    """Antes de existir `columns:` en el yaml, todas las columnas opcionales
+    se veían siempre. Apaño de migración igual que `_default_path_folder`:
+    una instalación sin la clave `columns` debe seguir viendo exactamente lo
+    mismo que veía ayer, no perder columnas de golpe.
+    """
+    return frozenset(CONFIGURABLE_COLUMN_KEYS)
 
 
 def _default_path_folder(name: str) -> str:
@@ -117,10 +127,20 @@ class ScheduleConfig:
 
 
 @dataclass(frozen=True)
+class ColumnsConfig:
+    # Claves de CycleColumn.key de las columnas OPCIONALES activas en la
+    # tabla de ciclos (pantalla e impresión comparten esta misma lista, ver
+    # logic/sterilization/columns.py). Las columnas fijas ni se guardan ni se
+    # preguntan aquí: no se pueden apagar.
+    visible_keys: frozenset[str]
+
+
+@dataclass(frozen=True)
 class SteriflowSettings:
     paths: SteriflowPaths
     autoclaves: list[AutoclaveConfig]
     schedule: ScheduleConfig
+    columns: ColumnsConfig
     # Si el modo automático debe arrancar solo al abrir la app. Se guarda
     # aquí -y no solo en memoria en el controller- para que apagarlo desde la
     # home page sobreviva a un reinicio (ver SteriflowController.set_auto_enabled).
@@ -169,8 +189,19 @@ def load_settings() -> SteriflowSettings:
                 time.fromisoformat(hour) for hour in raw["execution_hours"]
             )
         ),
+        columns=ColumnsConfig(visible_keys=_load_columns_visible_keys(raw)),
         auto_enabled=bool(raw.get("auto_enabled", False)),
     )
+
+
+def _load_columns_visible_keys(raw: dict) -> frozenset[str]:
+    visible_keys_raw = raw.get("columns", {}).get("visible")
+    if visible_keys_raw is None:
+        return _default_columns_visible_keys()
+    # Normaliza contra las claves que existen hoy: una clave suelta de un
+    # yaml antiguo con una columna ya renombrada/eliminada no debe colarse
+    # como una entrada fantasma que nunca va a casar con nada en columns.py.
+    return frozenset(visible_keys_raw) & frozenset(CONFIGURABLE_COLUMN_KEYS)
 
 
 def save_settings(settings: SteriflowSettings) -> None:
@@ -180,6 +211,9 @@ def save_settings(settings: SteriflowSettings) -> None:
         "execution_hours": [
             hour.strftime("%H:%M") for hour in settings.schedule.execution_hours
         ],
+        "columns": {
+            "visible": sorted(settings.columns.visible_keys),
+        },
         "auto_enabled": settings.auto_enabled,
         "autoclaves": [
             {

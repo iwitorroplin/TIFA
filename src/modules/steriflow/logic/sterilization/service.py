@@ -1,8 +1,10 @@
 """Orquesta el ledger de PDF respaldados y la extracción de su dato de
-esterilización. Llamado desde `BackupService` tras replicar hacia el
-servidor: primero se deja constancia de qué ha completado el backup, y solo
-después se intenta leer el contenido -así una reejecución sin PDF nuevos no
-vuelve a comprobar ni a abrir nada ya conocido.
+esterilización. Son dos acciones separadas, invocables por su cuenta desde
+`BackupService`: `record_backup_files` (llamada tras el import, deja
+constancia de qué PDF hay en local) y `extract_pending` (la acción manual
+"Analizar", que solo lee lo que el ledger diga que aún no se ha leído) -así
+una reejecución sin PDF nuevos no vuelve a comprobar ni a abrir nada ya
+conocido, y analizar no depende de haber exportado antes.
 
 Aquí es donde el ciclo deja de ser "lo que dice el PDF" y pasa a ser "lo que
 dice la planta": el número de autoclave que se guarda es el de la
@@ -25,17 +27,6 @@ from src.modules.steriflow.logic.sterilization import repo
 from src.modules.steriflow.logic.sterilization.hashing import sha256_of
 from src.modules.steriflow.logic.sterilization.models import SterilizationCycle
 from src.modules.steriflow.logic.sterilization.reader import SteriflowReadError, read_report
-
-
-def process(
-    conn: sqlite3.Connection,
-    autoclave: AutoclaveConfig,
-    local_folder: Path,
-    backup_folder: Path,
-    logger: Logger,
-) -> None:
-    record_backup_files(conn, autoclave.name, local_folder, logger)
-    extract_pending(conn, autoclave, local_folder, backup_folder, logger)
 
 
 def record_backup_files(conn: sqlite3.Connection, autoclave: str, local_folder: Path, logger: Logger) -> None:

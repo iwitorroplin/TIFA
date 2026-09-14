@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QDate, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QCheckBox,
-    QComboBox,
-    QDateEdit,
     QDialog,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
-    QLabel,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -21,15 +16,15 @@ from PySide6.QtWidgets import (
 from src.modules.ferlo.logic.controller import FerloController
 from src.modules.ferlo.messages import catalog
 from src.modules.ferlo.logic.analysis.programs import MANUAL_PROGRAM_CODE
-from src.modules.ferlo.ui.assign_program_dialog import AssignProgramDialog
-from src.modules.ferlo.ui.data_presenter import (
-    DEFAULT_PAGE_SIZE,
-    FerloDataPresenter,
-)
-from src.modules.ferlo.ui.detail_dialog import FerloDetailDialog
+from src.modules.ferlo.ui.data_page.assign_program_dialog import AssignProgramDialog
+from src.modules.ferlo.ui.data_page.data_presenter import FerloDataPresenter
+from src.modules.ferlo.ui.data_page.detail_dialog import FerloDetailDialog
 from src.shared.messages.notice import push
 from src.shared.messages.types import Module
 from src.shared.ui.components.app_button import AppButton
+
+from src.modules.ferlo.ui.data_page.filters_row import FiltersRow
+from src.modules.ferlo.ui.data_page.pagination_row import PaginationRow
 
 _COL_MACHINE = 0
 _COL_STARTED_AT = 1
@@ -58,9 +53,6 @@ _HEADERS = [
 _REVIEW_BACKGROUND = QColor(255, 244, 200)
 _REVIEW_FOREGROUND = QColor(90, 60, 0)
 
-_PAGE_SIZES = [20, 50, 100]
-_FILTER_DEBOUNCE_MS = 300
-
 
 class FerloDataPage(QWidget):
     def __init__(self, controller: FerloController):
@@ -69,19 +61,18 @@ class FerloDataPage(QWidget):
         self._controller = controller
         self._presenter = FerloDataPresenter()
 
-        self._filter_debounce = QTimer(self)
-        self._filter_debounce.setSingleShot(True)
-        self._filter_debounce.setInterval(_FILTER_DEBOUNCE_MS)
-        self._filter_debounce.timeout.connect(self._on_filters_changed)
-
         self._cycles_table = self._build_cycles_table()
+        self._filters_row = FiltersRow(controller, self._presenter, self._refresh)
+        self._pagination_row = PaginationRow(
+            self._presenter, self._on_page_size_changed, self._go_previous_page, self._go_next_page
+        )
 
         group = QGroupBox("Ciclos")
         group_layout = QVBoxLayout(group)
-        group_layout.addWidget(self._build_filters_row())
+        group_layout.addWidget(self._filters_row)
         group_layout.addWidget(self._cycles_table)
         group_layout.addWidget(self._build_actions_row())
-        group_layout.addWidget(self._build_pagination_row())
+        group_layout.addWidget(self._pagination_row)
 
         layout = QVBoxLayout(self)
         layout.addWidget(group)
@@ -157,98 +148,8 @@ class FerloDataPage(QWidget):
         filas = sorted({index.row() for index in self._cycles_table.selectionModel().selectedRows()})
         return self._presenter.cycles_at(filas)
 
-    def _build_filters_row(self):
-        self._machine_combo = QComboBox()
-        self._machine_combo.addItem("Todas", userData=None)
-        for machine in self._controller.machines:
-            self._machine_combo.addItem(machine, userData=machine)
-        self._machine_combo.currentIndexChanged.connect(self._on_filters_changed)
-
-        self._date_from_checkbox = QCheckBox("Desde:")
-        self._date_from_checkbox.toggled.connect(self._on_date_filter_toggled)
-        self._date_from_edit = QDateEdit(QDate.currentDate())
-        self._date_from_edit.setCalendarPopup(True)
-        self._date_from_edit.setEnabled(False)
-        self._date_from_edit.dateChanged.connect(self._on_filters_changed)
-
-        self._date_to_checkbox = QCheckBox("Hasta:")
-        self._date_to_checkbox.toggled.connect(self._on_date_filter_toggled)
-        self._date_to_edit = QDateEdit(QDate.currentDate())
-        self._date_to_edit.setCalendarPopup(True)
-        self._date_to_edit.setEnabled(False)
-        self._date_to_edit.dateChanged.connect(self._on_filters_changed)
-
-        self._needs_review_checkbox = QCheckBox("Solo pendientes de revisión")
-        self._needs_review_checkbox.toggled.connect(self._on_filters_changed)
-
-        clear_button = AppButton("Limpiar filtros")
-        clear_button.clicked.connect(self._clear_filters)
-
-        row = QWidget()
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.addWidget(QLabel("Máquina:"))
-        row_layout.addWidget(self._machine_combo)
-        row_layout.addWidget(self._date_from_checkbox)
-        row_layout.addWidget(self._date_from_edit)
-        row_layout.addWidget(self._date_to_checkbox)
-        row_layout.addWidget(self._date_to_edit)
-        row_layout.addWidget(self._needs_review_checkbox)
-        row_layout.addWidget(clear_button)
-        row_layout.addStretch()
-        return row
-
-    def _build_pagination_row(self):
-        self._page_size_combo = QComboBox()
-        for size in _PAGE_SIZES:
-            self._page_size_combo.addItem(str(size), userData=size)
-        self._page_size_combo.setCurrentIndex(_PAGE_SIZES.index(DEFAULT_PAGE_SIZE))
-        self._page_size_combo.currentIndexChanged.connect(self._on_page_size_changed)
-
-        self._previous_button = AppButton("< Anterior")
-        self._previous_button.clicked.connect(self._go_previous_page)
-
-        self._next_button = AppButton("Siguiente >")
-        self._next_button.clicked.connect(self._go_next_page)
-
-        self._pagination_label = QLabel()
-
-        row = QWidget()
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.addWidget(QLabel("Mostrar:"))
-        row_layout.addWidget(self._page_size_combo)
-        row_layout.addStretch()
-        row_layout.addWidget(self._pagination_label)
-        row_layout.addWidget(self._previous_button)
-        row_layout.addWidget(self._next_button)
-        return row
-
-    def _on_date_filter_toggled(self):
-        self._date_from_edit.setEnabled(self._date_from_checkbox.isChecked())
-        self._date_to_edit.setEnabled(self._date_to_checkbox.isChecked())
-        self._on_filters_changed()
-
-    def _clear_filters(self):
-        self._filter_debounce.stop()
-        self._machine_combo.setCurrentIndex(0)
-        self._date_from_checkbox.setChecked(False)
-        self._date_to_checkbox.setChecked(False)
-        self._needs_review_checkbox.setChecked(False)
-        self._presenter.clear_filters()
-        self._refresh()
-
-    def _on_filters_changed(self):
-        self._presenter.set_machine(self._machine_combo.currentData())
-        self._presenter.set_date_range(
-            self._date_from_edit.date().toPython() if self._date_from_checkbox.isChecked() else None,
-            self._date_to_edit.date().toPython() if self._date_to_checkbox.isChecked() else None,
-        )
-        self._presenter.set_needs_review(self._needs_review_checkbox.isChecked())
-        self._refresh()
-
-    def _on_page_size_changed(self):
-        self._presenter.set_page_size(self._page_size_combo.currentData())
+    def _on_page_size_changed(self, size):
+        self._presenter.set_page_size(size)
         self._refresh()
 
     def _go_previous_page(self):
@@ -260,6 +161,7 @@ class FerloDataPage(QWidget):
             self._refresh()
 
     def _refresh(self):
+        self._filters_row.apply_to_presenter()
         self._presenter.reload()
 
         table = self._cycles_table
@@ -269,12 +171,7 @@ class FerloDataPage(QWidget):
             table.insertRow(row)
             self._set_cycle_row(row, cycle)
 
-        self._update_pagination_controls()
-
-    def _update_pagination_controls(self):
-        self._pagination_label.setText(self._presenter.pagination_label())
-        self._previous_button.setEnabled(self._presenter.can_go_previous())
-        self._next_button.setEnabled(self._presenter.can_go_next())
+        self._pagination_row.repaint()
 
     def _set_cycle_row(self, row, cycle):
         table = self._cycles_table
